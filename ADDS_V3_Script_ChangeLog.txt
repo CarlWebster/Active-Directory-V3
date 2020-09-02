@@ -1,0 +1,104 @@
+#Original Script created April, 2014 by Carl Webster with a lot of help from Michael B. Smith Exchange MVP
+#Created by Carl Webster and Michael B. Smith
+#webster@carlwebster.com
+#@carlwebster on Twitter
+#https://www.CarlWebster.com
+#
+#michael@smithcons.com
+#@essentialexch on Twitter
+#https://www.essential.exchange/blog/
+
+#Version 3.00 2-Sep-2020
+#	The Michael B. Smith Update and is based on version 2.22 and updated with the changes made up to 2.26
+#	This is the "user/OU speedup" release. Significant efforts were spent to make the script run
+#	faster in environments where large numbers of users and OUs exist.
+#
+#	Went to Set-StrictMode -Version Latest, from Version 2 and cleaned up all related errors
+#	Rewrite AddHTMLTable, FormatHTMLTable, and WriteHTMLLine for speed and accuracy
+#	Rewrite Line to use StringBuilder for speed
+#	Again rewrite Line to lx for speed (not fully deployed)
+#	In many places, pre-calculate the sizes of rowarray (a parameter to AddHTMLTable/FormatHTMLTable)
+#		and use a fix-sized array (for speed). This caused changes in MANY places, plus several
+#		foundational changes so that rowarray could be pre-calculated. This avoids creation of
+#		array copies and memory thrashing. Eliminate rowarray when use is done. (More on this can
+#		be done, but I believe the high-usage areas were all addressed.)
+#	Replace these two incorrect Lync/SfB schema attributes
+#			'msRTCSIP-UserRoutingGroupId', #Lync/SfB
+#			'msRTCSIP-MirrorBackEndServer' #Lync/SfB
+#		with
+#			'ms-RTC-SIP-PoolAddress'
+#			'ms-RTC-SIP-DomainName'
+#	Stop using a Switch statement for HTML colors and use a pre-calculated HTML array (for speed).
+#	Rewrite Get-RDUserSetting to GetTsAttributes (for speed)
+#	Rewrite ProcessMiscDataByDomain into getDSUsers and a driver. Switch from using arraylists to List<T>.
+#		Avoid array/List copies during sort. Generate a single user object shared among all lists. Stop using
+#		Get-ADUser and Switch to using .NET DirectoryServices. (For large environments, memory requirements
+#		have plummeted, and speed greatly increased; for small environments, the changes are likely not 
+#		noticeable.) Ensure output formatting consistent among all types (Text/HTML/MSWord).
+#	Update ProcessGPOSsByDomain, ProcessGPOsByOUOld, and ProcessGPOsByOUNew to only request the specific
+#		info from AD that they require (still more that can be done here). Again, for speed.
+#	Update OutputTimeServerRegistryKeys so that if a server isn't available, all 12 keys aren't requested.
+#		That is, detect server-down on the first key request and use default values for all keys.
+#	Update OutputADFileLocations for the same (don't retry if the server is known to be down)
+#	Update each of the Output*UserInfo Functions so that the first parameter is Object[] instead of
+#		Object. If the array contained a single element, PowerShell was unrolling it, requiring 
+#		special handling. Using Object[] prevents the unrolling.
+#	August 2020
+#	Changed the $Section parameter to use ValidateSet().
+#	In FormatHTMLTable, only write a table header line if the tableheader length is greater than zero.
+#	In FormatHTMLTable, write </td> and </tr> in the proper places (previously, there weren't enough
+#	</td>'s being written). I think all HTML is now "legal".
+#	In FormatHTMLTable, make the docs accurate. Finally.
+#	FormatHTMLTable - fix the usage of $fixedWidth and $columnIndex for good (I hope).
+#	AddHTMLTable - match the usage of $fixedInfo and $columnIndex to that of FormatHTMLTable.
+#	AddHTMLTable - optimize usage of $fixedInfo.
+#	Further pre-calculated $rowArray rewrites.
+#	Don't try too hard to analyze 'Server Core' yes or no. Was invalid check of $error array.
+#	Domain Admins HTML output was missing the "Domain" column. Added.
+#	All three output types were generating an error accessing TrustExtendedAttributes.TrustDirection. Fixed.
+#   $DomainInfo.PublicKeyRequiredPasswordRolling could be accessed when $null. Ensure that doesn't happen.
+#
+#WEBSTER'S CHANGES for 3.00
+#
+#	Add checking for a Word version of 0, which indicates the Office installation needs repairing
+#	Add Receive Side Scaling setting to Function OutputNICItem
+#	Change color variables $wdColorGray15 and $wdColorGray05 from [long] to [int]
+#	Change location of the -Dev, -Log, and -ScriptInfo output files from the script folder to the -Folder location (Thanks to Guy Leech for the "suggestion")
+#	Change some Write-Error to Write-Warning
+#	Change some Write-Warning to Write-Host
+#	Change Text output to use [System.Text.StringBuilder]
+#		Updated Functions Line and SaveAndCloseTextDocument
+#	Fix Swedish Table of Contents (Thanks to Johan Kallio)
+#		From 
+#			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+#		To
+#			'sv-'	{ 'Automatisk innehållsförteckn2'; Break }
+#	Fixed all WriteHTMLLine lines that were supposed to be in bold. Used MBS' updates.
+#	Fixed issues with the Domain Admins Privileged Group where the user type was assumed to be a User
+#		Added checking for the object type and handling Groups and Users
+#	Fixed issues with Word tables with later versions of PowerShell.
+#	Fixed issues with Word table formatting.
+#	Fixed several variable name typos
+#	General code cleanup
+#	HTML is now the default output format.
+#	In Function OutputNicItem, change how $powerMgmt is retrieved
+#		Will now show "Not Supported" instead of "N/A" if the NIC driver does not support Power Management (i.e., XenServer)
+#	Reformatted the terminating Write-Error messages to make them more visible and readable in the console
+#	Removed invalid URLs from the code if I could not find the original article's new location
+#	Remove the SMTP parameterset and manually verify the parameters
+#	Reorder parameters
+#	Updated Function OutputNicItem with a $ComputerName parameter
+#		Update Function GetComputerWMIInfo to pass the computer name parameter to the OutputNicItem Function
+#	Update Function SetWordCellFormat to change parameter $BackgroundColor to [int]
+#	Update Functions GetComputerWMIInfo and OutputNicInfo to fix two bugs in NIC Power Management settings
+#	Update Function SendEmail to handle anonymous unauthenticated email
+#		Update Help Text with examples
+#	Updated help text
+#	Updated Function SendEmail with corrections made by MBS
+#	Updated the following Exchange Schema Versions:
+#		"15312" = "Exchange 2013 CU7 through CU23"
+#		"15317" = "Exchange 2016 Preview and RTM"
+#		"15332" = "Exchange 2016 CU7 through CU15"
+#		"17000" = "Exchange 2019 RTM/CU1"
+#		"17001" = "Exchange 2019 CU2-CU4"
+#	You can now select multiple output formats. This required extensive code changes.
