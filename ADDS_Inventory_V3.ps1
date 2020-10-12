@@ -770,9 +770,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.00
+	VERSION: 3.01
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: September 2, 2020
+	LASTEDIT: October 12, 2020
 #>
 
 
@@ -913,6 +913,9 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.01 12-Oct-2020
+#	Handle the Domain Admins privileged group processing and output the same way the Enterprise and Schema Admins are done
 #
 #Version 3.00 2-Sep-2020
 #	The Michael B. Smith Update and is based on version 2.22 and updated with the changes made up to 2.26
@@ -12382,10 +12385,10 @@ Function ProcessGroupInformation
 				{
 					Line 0 "Privileged Groups"
 					Line 1 "Domain Admins ($AdminsCountStr members):"
-					Line 2 "                                                   Password    Password          "
-					Line 2 "                                                   Last        Never      Account"
-					Line 2 "Name                                               Changed     Expires    Enabled"
-					Line 2 "================================================================================="
+					Line 2 "                                                                              Password   Password          "
+					Line 2 "                                                                              Last       Never      Account"
+					Line 2 "Name                                                Domain                    Changed    Expires    Enabled"
+					Line 2 "==========================================================================================================="
 				}
 				If($HTML)
 				{
@@ -12404,20 +12407,18 @@ Function ProcessGroupInformation
 						$xRow++
 					}
 					
-					#get object type user or group
-					$sid = $Admin.SID.Value
-					$result = Get-ADObject -Filter "objectSid -eq '$sid'" -EA 0
-					
-					If($? -and $Null -ne $result)
+					#V3.01 change to use same methos as EA & SA
+					$dn = $Admin.distinguishedName
+					$xServer = $dn.SubString( $dn.IndexOf( ',DC=' ) + 1 ).Replace( 'DC=', '' ).Replace( ',', '.' )
+
+					If($Admin.ObjectClass -eq 'user')
 					{
-						If($result.ObjectClass -eq "group")
-						{
-							$User = Get-ADGroup -Identity $Admin.SID -Server $Domain -EA 0 
-						}
-						ElseIf($result.ObjectClass -eq "user")
-						{
-							$User = Get-ADUser -Identity $Admin.SID -Server $Domain -Properties PasswordLastSet, Enabled, PasswordNeverExpires -EA 0 
-						}
+						$User = Get-ADUser -Identity $Admin.SID.value -Server $xServer `
+						-Properties PasswordLastSet, Enabled, PasswordNeverExpires -EA 0
+					}
+					ElseIf($Admin.ObjectClass -eq 'group')
+					{
+						$User = Get-ADGroup -Identity $Admin.SID.value -Server $xServer -EA 0
 					}
 					Else
 					{
@@ -12426,55 +12427,39 @@ Function ProcessGroupInformation
 
 					If($? -and $Null -ne $User)
 					{
-						If($MSWord -or $PDF)
+						If($Admin.ObjectClass -eq 'user')
 						{
-							$Table.Cell($xRow,1).Range.Text = $User.Name
-							If($result.ObjectClass -eq "user")
+							If($MSWord -or $PDF)
 							{
+								$Table.Cell($xRow,1).Range.Text = $User.Name
+								$Table.Cell($xRow,2).Range.Text = $xServer
 								If($Null -eq $User.PasswordLastSet)
-								{
-									$Table.Cell($xRow,2).Shading.BackgroundPatternColor = $wdColorRed
-									$Table.Cell($xRow,2).Range.Font.Bold  = $True
-									$Table.Cell($xRow,2).Range.Font.Color = $WDColorBlack
-									$Table.Cell($xRow,2).Range.Text = "No Date Set"
-								}
-								Else
-								{
-									$Table.Cell($xRow,2).Range.Text = (Get-Date $User.PasswordLastSet -f d)
-								}
-								If($User.PasswordNeverExpires -eq $True)
 								{
 									$Table.Cell($xRow,3).Shading.BackgroundPatternColor = $wdColorRed
 									$Table.Cell($xRow,3).Range.Font.Bold  = $True
 									$Table.Cell($xRow,3).Range.Font.Color = $WDColorBlack
-									$Table.Cell($xRow,3).Range.Text = "True"
+									$Table.Cell($xRow,3).Range.Text = "No Date Set"
 								}
 								Else
 								{
-									$Table.Cell($xRow,3).Range.Text = "False"
+									$Table.Cell($xRow,3).Range.Text = (Get-Date $User.PasswordLastSet -f d)
 								}
-								If($User.Enabled -eq $False)
+								If($User.PasswordNeverExpires -eq $True)
 								{
 									$Table.Cell($xRow,4).Shading.BackgroundPatternColor = $wdColorRed
 									$Table.Cell($xRow,4).Range.Font.Bold  = $True
 									$Table.Cell($xRow,4).Range.Font.Color = $WDColorBlack
-									$Table.Cell($xRow,4).Range.Text = "False"
 								}
-								Else
+								$Table.Cell($xRow,4).Range.Text = $User.PasswordNeverExpires.ToString()
+								If($User.Enabled -eq $False)
 								{
-									$Table.Cell($xRow,4).Range.Text = "True"
+									$Table.Cell($xRow,5).Shading.BackgroundPatternColor = $wdColorRed
+									$Table.Cell($xRow,5).Range.Font.Bold  = $True
+									$Table.Cell($xRow,5).Range.Font.Color = $WDColorBlack
 								}
+								$Table.Cell($xRow,5).Range.Text = $User.Enabled.ToString()
 							}
-							Else
-							{
-								$Table.Cell($xRow,2).Range.Text = "N/A"
-								$Table.Cell($xRow,3).Range.Text = "N/A"
-								$Table.Cell($xRow,4).Range.Text = "N/A"
-							}
-						}
-						If($Text)
-						{
-							If($result.ObjectClass -eq "user")
+							If($Text)
 							{
 								If($Null -eq $User.PasswordLastSet)
 								{
@@ -12484,24 +12469,12 @@ Function ProcessGroupInformation
 								{
 									$PasswordLastSet = (Get-Date $User.PasswordLastSet -f d)
 								}
-								#V3.00
-								$PasswordNeverExpires = $User.PasswordNeverExpires.ToString()
-								#V3.00
-								$UserEnabled = $User.Enabled.ToString()
+								Line 2 ( "{0,-50}  {1,-25} {2,-10} {3,-10} {4,-5}" -f $User.Name,$xServer,$PasswordLastSet,$User.PasswordNeverExpires.ToString(),$User.Enabled.ToString())
 							}
-							Else
+							If($HTML)
 							{
-								$PasswordLastSet = "N/A"
-								$PasswordNeverExpires = "N/A"
-								$UserEnabled = "N/A"
-							}
-							Line 2 ( "{0,-50} {1,-11} {2,-10} {3,-5}" -f $User.Name,$PasswordLastSet,$PasswordNeverExpires,$UserEnabled)
-						}
-						If($HTML)
-						{
-							$UserName = $User.Name
-							If($result.ObjectClass -eq "user")
-							{
+								$UserName = $User.Name
+								$Domain = $xServer
 								If($Null -eq $User.PasswordLastSet)
 								{
 									$PasswordLastSet = "No Date Set"
@@ -12510,16 +12483,31 @@ Function ProcessGroupInformation
 								{
 									$PasswordLastSet = (Get-Date $User.PasswordLastSet -f d)
 								}
-								#V3.00
 								$PasswordNeverExpires = $User.PasswordNeverExpires.ToString()
-								#V3.00
 								$Enabled = $User.Enabled.ToString()
 							}
-							Else
+						}
+						ElseIf($Admin.ObjectClass -eq 'group')
+						{
+							If($MSWord -or $PDF)
 							{
+								$Table.Cell($xRow,1).Range.Text = "$($User.Name) (group)"
+								$Table.Cell($xRow,2).Range.Text = $xServer
+								$Table.Cell($xRow,3).Range.Text = "N/A"
+								$Table.Cell($xRow,4).Range.Text = "N/A"
+								$Table.Cell($xRow,5).Range.Text = "N/A"
+							}
+							If($Text)
+							{
+								Line 2 ( "{0,-43} (group) {1,-25} {2,-10} {3,-10} {4,-5}" -f $User.Name,$xServer,"N/A","N/A","N/A")
+							}
+							If($HTML)
+							{
+								$UserName = "$($User.Name) (group)"
+								$Domain = $xServer
 								$PasswordLastSet = "N/A"
 								$PasswordNeverExpires = "N/A"
-								$UserEnabled = "N/A"
+								$Enabled = "N/A"
 							}
 						}
 					}
@@ -12527,27 +12515,31 @@ Function ProcessGroupInformation
 					{
 						If($MSWord -or $PDF)
 						{
-							$Table.Cell($xRow,1).Range.Text = $Admin.SID
-							$Table.Cell($xRow,2).Range.Text = "Unknown"
+							$Table.Cell($xRow,1).Range.Text = $Admin.SID.Value
+							$Table.Cell($xRow,2).Range.Text = $xServer
 							$Table.Cell($xRow,3).Range.Text = "Unknown"
 							$Table.Cell($xRow,4).Range.Text = "Unknown"
+							$Table.Cell($xRow,5).Range.Text = "Unknown"
 						}
 						If($Text)
 						{
-							Line 2 ( "{0,-50} {1,-11} {2,-10} {3,-5}" -f $Admin.SID,"Unknown","Unknown","Unknown")
+							Line 2 ( "{0,-50} {1,-25} {2,-10} {3,-10} {4,-5}" -f $Admin.SID.Value,$xServer,"Unknown","Unknown","Unknown")
 						}
 						If($HTML)
 						{
-							$UserName = $Admin.SID
+							$UserName = $Admin.SID.Value
+							$Domain = $xServer
 							$PasswordLastSet = "Unknown"
 							$PasswordNeverExpires = "Unknown"
 							$Enabled = "Unknown"
 						}
 					}
+					
 					If($HTML)
 					{
 						$rowdata[ $rowIndx ] = @(
 							$UserName,             $htmlwhite,
+							$Domain,               $htmlwhite,
 							$PasswordLastSet,      $htmlwhite,
 							$PasswordNeverExpires, $htmlwhite,
 							$Enabled,              $htmlwhite
@@ -12555,6 +12547,7 @@ Function ProcessGroupInformation
 						$rowIndx++
 					}
 				}
+			
 				If($MSWord -or $PDF)
 				{
 					#set column widths
@@ -12564,13 +12557,14 @@ Function ProcessGroupInformation
 					{
 						Switch ($xcol.Index)
 						{
-						  1 {$xcol.width = 200; Break}
-						  2 {$xcol.width = 66; Break}
-						  3 {$xcol.width = 56; Break}
+						  1 {$xcol.width = 100; Break}
+						  2 {$xcol.width = 108; Break}
+						  3 {$xcol.width = 66; Break}
 						  4 {$xcol.width = 56; Break}
+						  5 {$xcol.width = 56; Break}
 						}
 					}
-					
+
 					$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 					$Table.AutoFitBehavior($wdAutoFitFixed)
 
@@ -12588,15 +12582,16 @@ Function ProcessGroupInformation
 				}
 				If($HTML)
 				{
-					$columnWidths  = @( '100px', '66px', '56px', '56px' )
+					$columnWidths  = @( '100px', '108px', '66px', '56px', '56px' )
 					$columnHeaders = @(
 						'Name',                   $htmlsb,
+						'Domain',                 $htmlsb,
 						'Password Last Changed',  $htmlsb,
 						'Password Never Expires', $htmlsb,
 						'Account Enabled',        $htmlsb
 					)
 
-					FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders -fixedWidth $columnWidths -tablewidth '278'
+					FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders -fixedWidth $columnWidths -tablewidth '386'
 					WriteHTMLLine 0 0 ''
 
 					$rowData = $null

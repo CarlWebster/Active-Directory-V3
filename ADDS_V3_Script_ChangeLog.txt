@@ -8,6 +8,9 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.01 12-Oct-2020
+#	Handle the Domain Admins privileged group processing and output the same way the Enterprise and Schema Admins are done
+
 #Version 3.00 2-Sep-2020
 #	The Michael B. Smith Update and is based on version 2.22 and updated with the changes made up to 2.26
 #	This is the "user/OU speedup" release. Significant efforts were spent to make the script run
