@@ -1,4 +1,4 @@
-﻿#Requires -Version 3.0
+#Requires -Version 3.0
 #requires -Module ActiveDirectory
 #requires -Module GroupPolicy
 #This File is in Unicode format.  Do not edit in an ASCII editor. Notepad++ UTF-8-BOM
@@ -10847,7 +10847,7 @@ Function ProcessDomainControllers
 				$tmp = "False"
 			}
 			$ScriptInformation += @{ Data = "Enabled"; Value = $tmp; }
-			$ScriptInformation += @{ Data = "Hostname"; Value = $DC.HostName; }
+			$ScriptInformation += @{ Data = "Domain"; Value = @($DC.domain) -join ", "; }
 			If($DC.IsGlobalCatalog -eq $True)
 			{
 				$tmp = "Yes" 
@@ -10866,8 +10866,8 @@ Function ProcessDomainControllers
 				$tmp = "No"
 			}
 			$ScriptInformation += @{ Data = "Read-only"; Value = $tmp; }
-			$ScriptInformation += @{ Data = "LDAP port"; Value = $DC.LdapPort.ToString(); }
-			$ScriptInformation += @{ Data = "SSL port"; Value = $DC.SslPort.ToString(); }
+			$ScriptInformation += @{ Data = "LDAP port"; Value = @($DC.LdapPort) -join ", "; }
+			$ScriptInformation += @{ Data = "SSL port"; Value = @($DC.SslPort) -join ", "; }
 			If($Null -eq $FSMORoles)
 			{
 				$ScriptInformation += @{ Data = "Operation Master roles"; Value = "<None>"; }
@@ -10911,34 +10911,34 @@ Function ProcessDomainControllers
 					
 				}
 			}
-			$ScriptInformation += @{ Data = "Site"; Value = $DC.Site; }
-			$ScriptInformation += @{ Data = "Operating System"; Value = $DC.OperatingSystem; }
+			$ScriptInformation += @{ Data = "Site"; Value = @($DC.Site) -join ", "; }
+			$ScriptInformation += @{ Data = "Operating System"; Value = (@($DC.OperatingSystem) -join ", "); }
 			
 			If(![String]::IsNullOrEmpty($DC.OperatingSystemServicePack))
 			{
-				$ScriptInformation += @{ Data = "Service Pack"; Value = $DC.OperatingSystemServicePack; }
+				$ScriptInformation += @{ Data = "Service Pack"; Value = (@($DC.OperatingSystemServicePack) -join ", "); }
 			}
-			$ScriptInformation += @{ Data = "Operating System version"; Value = $DC.OperatingSystemVersion; }
+			$ScriptInformation += @{ Data = "Operating System version"; Value = (@($DC.OperatingSystemVersion) -join ", "); }
 			
 			If(!$Hardware)
 			{
-				If([String]::IsNullOrEmpty($DC.IPv4Address))
+				If((@($DC.IPv4Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
 					$tmp = "<None>"
 				}
 				Else
 				{
-					$tmp = $DC.IPv4Address
+					$tmp = (@($DC.IPv4Address) -join ", ")
 				}
 				$ScriptInformation += @{ Data = "IPv4 Address"; Value = $tmp; }
 
-				If([String]::IsNullOrEmpty($DC.IPv6Address))
+				If((@($DC.IPv6Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
 					$tmp = "<None>"
 				}
 				Else
 				{
-					$tmp = $DC.IPv6Address
+					$tmp = (@($DC.IPv6Address) -join ", ")
 				}
 				$ScriptInformation += @{ Data = "IPv6 Address"; Value = $tmp; }
 			}
@@ -10964,7 +10964,7 @@ Function ProcessDomainControllers
 		{
 			Line 0 "///  DC: $($DC.Name)  \\\"
 			Line 1 "Default partition`t`t: " $DC.DefaultPartition
-			Line 1 "Domain`t`t`t`t: " $DC.domain
+			Line 1 "Domain`t`t`t`t: " (@($DC.domain) -join ", ")
 			If($DC.Enabled -eq $True)
 			{
 				$tmp = "True"
@@ -10974,7 +10974,7 @@ Function ProcessDomainControllers
 				$tmp = "False"
 			}
 			Line 1 "Enabled`t`t`t`t: " $tmp
-			Line 1 "Hostname`t`t`t: " $DC.HostName
+			Line 1 "Hostname`t`t`t: " (@($DC.HostName) -join ", ")
 			If($DC.IsGlobalCatalog -eq $True)
 			{
 				$tmp = "Yes" 
@@ -10993,8 +10993,8 @@ Function ProcessDomainControllers
 				$tmp = "No"
 			}
 			Line 1 "Read-only`t`t`t: " $tmp
-			Line 1 "LDAP port`t`t`t: " $DC.LdapPort.ToString()
-			Line 1 "SSL port`t`t`t: " $DC.SslPort.ToString()
+			Line 1 "LDAP port`t`t`t: " @($DC.LdapPort) -join ", "
+			Line 1 "SSL port`t`t`t: " @($DC.SslPort) -join ", "
 			Line 1 "Operation Master roles`t`t: " -NoNewLine
 			If($Null -eq $FSMORoles)
 			{
@@ -11040,33 +11040,33 @@ Function ProcessDomainControllers
 					}
 				}
 			}
-			Line 1 "Site`t`t`t`t: " $DC.Site
-			Line 1 "Operating System`t`t: " $DC.OperatingSystem
+			Line 1 "Site`t`t`t`t: " (@($DC.Site) -join ", ")
+			Line 1 "Operating System`t`t: " (@($DC.OperatingSystem) -join ", ")
 			If(![String]::IsNullOrEmpty($DC.OperatingSystemServicePack))
 			{
-				Line 1 "Service Pack`t`t`t: " $DC.OperatingSystemServicePack
+				Line 1 "Service Pack`t`t`t: " (@($DC.OperatingSystemServicePack) -join ", ")
 			}
-			Line 1 "Operating System version`t: " $DC.OperatingSystemVersion
+			Line 1 "Operating System version`t: " (@($DC.OperatingSystemVersion) -join ", ")
 			
 			If(!$Hardware)
 			{
 				Line 1 "IPv4 Address`t`t`t: " -NoNewLine
-				If([String]::IsNullOrEmpty($DC.IPv4Address))
+				If((@($DC.IPv4Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
 					Line 0 "<None>"
 				}
 				Else
 				{
-					Line 0 $DC.IPv4Address
+					Line 0 (@($DC.IPv4Address) -join ", ")
 				}
 				Line 1 "IPv6 Address`t`t`t: " -NoNewLine
-				If([String]::IsNullOrEmpty($DC.IPv6Address))
+				If((@($DC.IPv6Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
 					Line 0 "<None>"
 				}
 				Else
 				{
-					Line 0 $DC.IPv6Address
+					Line 0 (@($DC.IPv6Address) -join ", ")
 				}
 			}
 			Line 0 ""
@@ -11076,7 +11076,7 @@ Function ProcessDomainControllers
 			WriteHTMLLine 2 0 "///&nbsp;&nbsp;$($DC.Name)&nbsp;&nbsp;\\\"
 			$rowdata = @()
 			$columnHeaders = @("Default partition",$htmlsb,$DC.DefaultPartition,$htmlwhite)
-			$rowdata += @(,('Domain',$htmlsb,$DC.domain,$htmlwhite))
+			$rowdata += @(,('Domain',($htmlsilver -bor $htmlbold),(@($DC.domain) -join ", "),$htmlwhite))
 			If($DC.Enabled -eq $True)
 			{
 				$tmp = "True"
@@ -11086,7 +11086,7 @@ Function ProcessDomainControllers
 				$tmp = "False"
 			}
 			$rowdata += @(,('Enabled',$htmlsb,$tmp,$htmlwhite))
-			$rowdata += @(,('Hostname',$htmlsb,$DC.HostName,$htmlwhite))
+			$rowdata += @(,('Hostname',($htmlsilver -bor $htmlbold),(@($DC.HostName) -join ", "),$htmlwhite))
 			If($DC.IsGlobalCatalog -eq $True)
 			{
 				$tmp = "Yes" 
@@ -11105,8 +11105,8 @@ Function ProcessDomainControllers
 				$tmp = "No"
 			}
 			$rowdata += @(,('Read-only',$htmlsb,$tmp,$htmlwhite))
-			$rowdata += @(,('LDAP port',$htmlsb,$DC.LdapPort.ToString(),$htmlwhite))
-			$rowdata += @(,('SSL port',$htmlsb,$DC.SslPort.ToString(),$htmlwhite))
+			$rowdata += @(,('LDAP port',($htmlsilver -bor $htmlbold),(@($DC.LdapPort) -join ", "),$htmlwhite))
+			$rowdata += @(,('SSL port',($htmlsilver -bor $htmlbold),(@($DC.SslPort) -join ", "),$htmlwhite))
 			If($Null -eq $FSMORoles)
 			{
 				$rowdata += @(,('Operation Master roles',$htmlsb,"None",$htmlwhite))
@@ -11149,36 +11149,36 @@ Function ProcessDomainControllers
 					}
 				}
 			}
-			$rowdata += @(,('Site',$htmlsb,$DC.Site,$htmlwhite))
-			$rowdata += @(,('Operating System',$htmlsb,$DC.OperatingSystem,$htmlwhite))
+			$rowdata += @(,('Site',($htmlsilver -bor $htmlbold),(@($DC.Site) -join ", "),$htmlwhite))
+			$rowdata += @(,('Operating System',($htmlsilver -bor $htmlbold),(@($DC.OperatingSystem) -join ", "),$htmlwhite))
 			
 			If(![String]::IsNullOrEmpty($DC.OperatingSystemServicePack))
 			{
-				$rowdata += @(,('Service Pack',$htmlsb,$DC.OperatingSystemServicePack,$htmlwhite))
+				$rowdata += @(,('Service Pack',($htmlsilver -bor $htmlbold),(@($DC.OperatingSystemServicePack) -join ", "),$htmlwhite))
 			}
-			$rowdata += @(,('Operating System version',$htmlsb,$DC.OperatingSystemVersion,$htmlwhite))
+			$rowdata += @(,('Operating System version',($htmlsilver -bor $htmlbold),(@($DC.OperatingSystemVersion) -join ", "),$htmlwhite))
 			
 			If(!$Hardware)
 			{
-				If([String]::IsNullOrEmpty($DC.IPv4Address))
+				If((@($DC.IPv4Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
 					$tmp = "None"
 				}
 				Else
 				{
-					$tmp = $DC.IPv4Address
+					$tmp = (@($DC.IPv4Address) -join ", ")
 				}
-				$rowdata += @(,('IPv4 Address',$htmlsb,$tmp,$htmlwhite))
+				$rowdata += @(,('IPv4 Address',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
 
-				If([String]::IsNullOrEmpty($DC.IPv6Address))
+				If((@($DC.IPv6Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
 					$tmp = "None"
 				}
 				Else
 				{
-					$tmp = $DC.IPv6Address
+					$tmp = (@($DC.IPv6Address) -join ", ")
 				}
-				$rowdata += @(,('IPv6 Address',$htmlsb,$tmp,$htmlwhite))
+				$rowdata += @(,('IPv6 Address',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
 			}
 			
 			$columnWidths = @("175","300")
