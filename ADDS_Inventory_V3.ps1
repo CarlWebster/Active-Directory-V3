@@ -10837,7 +10837,7 @@ Function ProcessDomainControllers
 			WriteWordLine 2 0 $DC.Name
 			[System.Collections.Hashtable[]] $ScriptInformation = @()
 			$ScriptInformation += @{ Data = "Default partition"; Value = $DC.DefaultPartition; }
-			$ScriptInformation += @{ Data = "Domain"; Value = $DC.domain; }
+			$ScriptInformation += @{ Data = "Domain"; Value = @($DC.domain) -join ", "; }
 			If($DC.Enabled -eq $True)
 			{
 				$tmp = "True"
@@ -10914,7 +10914,7 @@ Function ProcessDomainControllers
 			$ScriptInformation += @{ Data = "Site"; Value = @($DC.Site) -join ", "; }
 			$ScriptInformation += @{ Data = "Operating System"; Value = (@($DC.OperatingSystem) -join ", "); }
 			
-			If(![String]::IsNullOrEmpty($DC.OperatingSystemServicePack))
+			If((@($DC.OperatingSystemServicePack) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 			{
 				$ScriptInformation += @{ Data = "Service Pack"; Value = (@($DC.OperatingSystemServicePack) -join ", "); }
 			}
@@ -11042,7 +11042,7 @@ Function ProcessDomainControllers
 			}
 			Line 1 "Site`t`t`t`t: " (@($DC.Site) -join ", ")
 			Line 1 "Operating System`t`t: " (@($DC.OperatingSystem) -join ", ")
-			If(![String]::IsNullOrEmpty($DC.OperatingSystemServicePack))
+			If((@($DC.OperatingSystemServicePack) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 			{
 				Line 1 "Service Pack`t`t`t: " (@($DC.OperatingSystemServicePack) -join ", ")
 			}
@@ -11076,7 +11076,7 @@ Function ProcessDomainControllers
 			WriteHTMLLine 2 0 "///&nbsp;&nbsp;$($DC.Name)&nbsp;&nbsp;\\\"
 			$rowdata = @()
 			$columnHeaders = @("Default partition",$htmlsb,$DC.DefaultPartition,$htmlwhite)
-			$rowdata += @(,('Domain',($htmlsilver -bor $htmlbold),(@($DC.domain) -join ", "),$htmlwhite))
+			$rowdata += @(,('Domain',$htmlsb,(@($DC.domain) -join ", "),$htmlwhite))
 			If($DC.Enabled -eq $True)
 			{
 				$tmp = "True"
@@ -11086,7 +11086,7 @@ Function ProcessDomainControllers
 				$tmp = "False"
 			}
 			$rowdata += @(,('Enabled',$htmlsb,$tmp,$htmlwhite))
-			$rowdata += @(,('Hostname',($htmlsilver -bor $htmlbold),(@($DC.HostName) -join ", "),$htmlwhite))
+			$rowdata += @(,('Hostname',$htmlsb,(@($DC.HostName) -join ", "),$htmlwhite))
 			If($DC.IsGlobalCatalog -eq $True)
 			{
 				$tmp = "Yes" 
@@ -11105,8 +11105,8 @@ Function ProcessDomainControllers
 				$tmp = "No"
 			}
 			$rowdata += @(,('Read-only',$htmlsb,$tmp,$htmlwhite))
-			$rowdata += @(,('LDAP port',($htmlsilver -bor $htmlbold),(@($DC.LdapPort) -join ", "),$htmlwhite))
-			$rowdata += @(,('SSL port',($htmlsilver -bor $htmlbold),(@($DC.SslPort) -join ", "),$htmlwhite))
+			$rowdata += @(,('LDAP port',$htmlsb,(@($DC.LdapPort) -join ", "),$htmlwhite))
+			$rowdata += @(,('SSL port',$htmlsb,(@($DC.SslPort) -join ", "),$htmlwhite))
 			If($Null -eq $FSMORoles)
 			{
 				$rowdata += @(,('Operation Master roles',$htmlsb,"None",$htmlwhite))
@@ -11149,14 +11149,14 @@ Function ProcessDomainControllers
 					}
 				}
 			}
-			$rowdata += @(,('Site',($htmlsilver -bor $htmlbold),(@($DC.Site) -join ", "),$htmlwhite))
-			$rowdata += @(,('Operating System',($htmlsilver -bor $htmlbold),(@($DC.OperatingSystem) -join ", "),$htmlwhite))
+			$rowdata += @(,('Site',$htmlsb,(@($DC.Site) -join ", "),$htmlwhite))
+			$rowdata += @(,('Operating System',$htmlsb,(@($DC.OperatingSystem) -join ", "),$htmlwhite))
 			
-			If(![String]::IsNullOrEmpty($DC.OperatingSystemServicePack))
+			If((@($DC.OperatingSystemServicePack) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 			{
-				$rowdata += @(,('Service Pack',($htmlsilver -bor $htmlbold),(@($DC.OperatingSystemServicePack) -join ", "),$htmlwhite))
+				$rowdata += @(,('Service Pack',$htmlsb,(@($DC.OperatingSystemServicePack) -join ", "),$htmlwhite))
 			}
-			$rowdata += @(,('Operating System version',($htmlsilver -bor $htmlbold),(@($DC.OperatingSystemVersion) -join ", "),$htmlwhite))
+			$rowdata += @(,('Operating System version',$htmlsb,(@($DC.OperatingSystemVersion) -join ", "),$htmlwhite))
 			
 			If(!$Hardware)
 			{
@@ -11168,7 +11168,7 @@ Function ProcessDomainControllers
 				{
 					$tmp = (@($DC.IPv4Address) -join ", ")
 				}
-				$rowdata += @(,('IPv4 Address',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
+				$rowdata += @(,('IPv4 Address',$htmlsb,$tmp,$htmlwhite))
 
 				If((@($DC.IPv6Address) | Where-Object { $null -ne $_ -and $_ -ne "" }).Count -eq 0)
 				{
@@ -11178,7 +11178,7 @@ Function ProcessDomainControllers
 				{
 					$tmp = (@($DC.IPv6Address) -join ", ")
 				}
-				$rowdata += @(,('IPv6 Address',($htmlsilver -bor $htmlbold),$tmp,$htmlwhite))
+				$rowdata += @(,('IPv6 Address',$htmlsb,$tmp,$htmlwhite))
 			}
 			
 			$columnWidths = @("175","300")
