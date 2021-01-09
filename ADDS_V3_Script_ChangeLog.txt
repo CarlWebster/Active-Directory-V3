@@ -8,6 +8,18 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.02 9-Jan-2021
+#	Added to the Computer Hardware section, the server's Power Plan
+#	Changed all Write-Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
+#	Clean up some spacing in the HTML output
+#	Fixed issue with the Services and OU tables where highlighted cells were not in red
+#	Fixed issue with the Word/PDF Domain Admins table with the missing Domain column
+#	In Function OutputTimeServerRegistryKeys, change the call to w32tm to use Invoke-Command to get around access denied errors
+#	Reordered parameters in an order recommended by Guy Leech
+#	Updated Exchange schema versions to include up to Exchange 2016 CU19 and Exchange 2019 CU8
+#	Updated help text
+#	Updated ReadMe file
+
 #Version 3.01 12-Oct-2020
 #	Handle the Domain Admins privileged group processing and output the same way the Enterprise and Schema Admins are done
 
