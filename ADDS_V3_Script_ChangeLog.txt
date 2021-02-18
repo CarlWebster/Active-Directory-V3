@@ -8,6 +8,37 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.03 22-Feb-2021
+#	Added a Try/Catch and -LDAPFilter when checking for the Exchange schema attributes to suppress the error if Exchange is not installed
+#	Added Domain SID to the Domain Information section
+#	Added SYSVOL State to Function OutputADFileLocations
+#		If SYSVOL State is not 4, highlight in red
+#	Added updates from MBS for MaxPasswordAge
+#		Update Function getDSUsers
+#		Update Function GetMaximumPasswordAge
+#	Changed from using Test-Connection to Test-NetConnection -Port 88
+#		Port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough for the suggestion)
+#	Cleaned up console output
+#	In Function BuildMultiColumnTable:
+#		Prevent a division by 0 error if $MaxLength was 0
+#		Fixed OutOfBounds array error (appears to be a corner case when there are 11 subnets assigned to a Site)
+#	Fixed bug to now catch empty Site Subnet arrays
+#		Added text "No Subnets linked to this site"
+#	Updated Function GetComputerServices to add "***" in the Text output when the service type is Automatic and Status is Stopped
+#	Updated Function getDSUsers to handle processing accounts in the Foreign Security Principals container
+#		Find all orphaned SIDs
+#		Get a count of orphaned SIDs
+#		Added Function OutputFSPUserInfo to output the Orphaned SIDs and the groups those SIDs are members of
+#	Updated Function ProcessGroupInformation to put HTML output in Red when:
+#		Password Last Change is null or not set
+#		Password Never Expires is True
+#		Account is Disabled
+#	Updated the help text
+#	Updated the ReadMe file
+#	When processing Groups for attribute adminCount -eq 1, fixed where the group name doesn’t match the samAccountName or the distinguishedName
+#	When processing Groups that have attribute adminCount -eq 1, check if there was an error retrieving members of the group
+#		If there was an error, add the text "Unable to retrieve group members. Check for orphaned SIDs." in place of the group members
+
 #Version 3.02 9-Jan-2021
 #	Added to the Computer Hardware section, the server's Power Plan
 #	Changed all Write-Verbose statements from Get-Date to Get-Date -Format G as requested by Guy Leech
