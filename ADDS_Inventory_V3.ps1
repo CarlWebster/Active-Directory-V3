@@ -37,7 +37,7 @@
 	You do NOT have to run this script on a domain controller. This script was developed 
 	and run from a Windows 10 VM.
 
-	While most of the script can be run with a non-admin account, there are some features 
+	While most of the script can run with a non-admin account, there are some features 
 	that will not or may not work without domain admin or enterprise admin rights.  
 	The Hardware and Services parameters require domain admin privileges.  
 	
@@ -73,23 +73,23 @@
 
 	Distinguished Name
 
-	Example: DC=tullahoma,DC=corp,DC=labaddomain,DC=com
+	Example: DC=labaddomain,DC=com
 
 	GUID (objectGUID)
 
-	Example: b9fa5fbd-4334-4a98-85f1-3a3a44069fc6
+	Example: b147a813-9938-4a89-bc93-58a0d36c41c3
 
 	Security Identifier (objectSid)
 
-	Example: S-1-5-21-3643273344-1505409314-3732760578
+	Example: S-1-5-21-3916992870-515249095-1421388220
 
 	DNS domain name
 
-	Example: tullahoma.corp.labaddomain.com
+	Example: labaddomain.com
 
 	NetBIOS domain name
 
-	Example: Tullahoma
+	Example: labaddomain
 
 	If both ADForest and ADDomain are specified, ADDomain takes precedence.
 .PARAMETER ADForest
@@ -100,7 +100,7 @@
 	Fully qualified domain name
 		Example: labaddomain.com
 	GUID (objectGUID)
-		Example: 599c3d2e-e61e-4d20-7b77-030d99495e19
+		Example: b147a813-9938-4a89-bc93-58a0d36c41c3
 	DNS host name
 		Example: labaddomain.com
 	NetBIOS name
@@ -443,6 +443,7 @@
 	
 	Because both ADForest and ADDomain are specified, ADDomain wins and child.company.tld 
 	is used for AD Domain.
+	
 	ADForest is set to the value of ADDomain.
 
 	ComputerName defaults to the value of $Env:USERDNSDOMAIN, then the script queries for 
@@ -464,6 +465,7 @@
 	Sideline for the Cover Page format.
 	Administrator for the User Name.
 	company.tld for the AD Forest
+	
 	The script runs remotely on the DC01 domain controller.
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -PDF -ADForest corp.carlwebster.com
@@ -506,6 +508,7 @@
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -hardware
 	
 	Creates an HTML report.
+	
 	Uses all default values and adds additional information for each domain controller about 
 	its hardware.
 
@@ -518,6 +521,7 @@
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -services
 	
 	Creates an HTML report.
+	
 	Will use all default values and add additional information for the services running on 
 	each domain controller.
 
@@ -530,6 +534,7 @@
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -DCDNSInfo
 	
 	Creates an HTML report.
+	
 	Uses all default values and adds additional information for each domain controller about 
 	its DNS IP configuration.
 
@@ -704,7 +709,7 @@
 
 	The script uses the default SMTP port 25 and does not use SSL.
 
-	If the current user's credentials are not valid to send email, the script prompts 
+	If the current user's credentials are not valid to send an email, the script prompts 
 	the user to enter valid credentials.
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -SmtpServer mailrelay.domain.tld -From 
@@ -768,8 +773,8 @@
 	The script uses the email server smtp.gmail.com on port 587 using SSL, sending from 
 	webster@gmail.com and sending to ITGroup@carlwebster.com.
 
-	If the current user's credentials are not valid to send email, the script prompts the 
-	user to enter valid credentials.
+	If the current user's credentials are not valid to send an email, the script prompts 
+	the user to enter valid credentials.
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
@@ -778,7 +783,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.03
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: February 18, 2021
+	LASTEDIT: February 20, 2021
 #>
 
 
@@ -925,7 +930,7 @@ Param(
 #	Added Domain SID to the Domain Information section
 #	Added SYSVOL State to Function OutputADFileLocations
 #		If SYSVOL State is not 4, highlight in red
-#	Added updates from MBS for MaxPasswordAge
+#	Added updates from Michael B. Smith for MaxPasswordAge
 #		Update Function getDSUsers
 #		Update Function GetMaximumPasswordAge
 #	Changed from using Test-Connection to Test-NetConnection -Port 88
@@ -1067,8 +1072,8 @@ Set-StrictMode -Version Latest
 
 #force on
 $PSDefaultParameterValues = @{"*:Verbose"=$True}
-#$SaveEAPreference = $ErrorActionPreference
-#$ErrorActionPreference = 'SilentlyContinue'
+$SaveEAPreference = $ErrorActionPreference
+$ErrorActionPreference = 'SilentlyContinue'
 $global:emailCredentials = $Null
 
 ## v3.00
@@ -1135,11 +1140,12 @@ If($Folder -ne "")
 		Else
 		{
 			#it exists but it is a file not a folder
+#Do not indent the following write-error lines. Doing so will mess up the console formatting of the error message.
 			Write-Error "
 			`n`n
-			`tFolder $Folder is a file, not a folder.
+	Folder $Folder is a file, not a folder.
 			`n`n
-			`tScript cannot Continue.
+	Script cannot continue.
 			`n`n"
 			Exit
 		}
@@ -1149,12 +1155,11 @@ If($Folder -ne "")
 		#does not exist
 		Write-Error "
 		`n`n
-		`t`t
-		Folder $Folder does not exist.
+	Folder $Folder does not exist.
 		`n`n
-		`t`t
-		Script cannot Continue.
-		`n`n"
+	Script cannot continue.
+		`n`n
+		"
 		Exit
 	}
 }
@@ -2797,7 +2802,7 @@ Function GetComputerServices
 	If($? -and $Null -ne $Services)
 	{
 		[int]$NumServices = $Services.count
-		Write-Verbose "$(Get-Date -Format G): `t`t$($NumServices) Services found"
+		Write-Verbose "$(Get-Date -Format G): `t`t`t$($NumServices) Services found"
 
 		If($MSWord -or $PDF)
 		{
@@ -6839,7 +6844,7 @@ Function SetFilenames
 Function ProcessScriptSetup
 {
 	#If hardware inventory or services are requested, make sure user is running the script with Domain Admin rights
-	Write-Verbose "$(Get-Date -Format G): `tTesting to see if $env:username has Domain Admin rights"
+	Write-Verbose "$(Get-Date -Format G): Testing to see if $env:username has Domain Admin rights"
 	
 	$AmIReallyDA = UserIsaDomainAdmin
 	If($AmIReallyDA -eq $True)
@@ -6847,11 +6852,11 @@ Function ProcessScriptSetup
 		#user has Domain Admin rights
 		If($ADDomain -ne "")
 		{
-			Write-Verbose "$(Get-Date -Format G): `t`t$env:username has Domain Admin rights in the $ADDomain Domain"
+			Write-Verbose "$(Get-Date -Format G): `t$env:username has Domain Admin rights in the $ADDomain Domain"
 		}
 		Else
 		{
-			Write-Verbose "$(Get-Date -Format G): `t`t$env:username has Domain Admin rights in the $ADForest Forest"
+			Write-Verbose "$(Get-Date -Format G): `t$env:username has Domain Admin rights in the $ADForest Forest"
 		}
 		$Script:DARights = $True
 	}
@@ -6860,11 +6865,11 @@ Function ProcessScriptSetup
 		#user does not have Domain Admin rights
 		If($ADDomain -ne "")
 		{
-			Write-Verbose "$(Get-Date -Format G): `t`t$env:username does not have Domain Admin rights in the $ADDomain Domain"
+			Write-Verbose "$(Get-Date -Format G): `t$env:username does not have Domain Admin rights in the $ADDomain Domain"
 		}
 		Else
 		{
-			Write-Verbose "$(Get-Date -Format G): `t`t$env:username does not have Domain Admin rights in the $ADForest Forest"
+			Write-Verbose "$(Get-Date -Format G): `t$env:username does not have Domain Admin rights in the $ADForest Forest"
 		}
 	}
 	
@@ -6872,11 +6877,12 @@ Function ProcessScriptSetup
 	
 	If($Hardware -or $Services -or $DCDNSInfo)
 	{
-		If($Hardware -and -not $Services)
+		If($Hardware)
 		{
 			Write-Verbose "$(Get-Date -Format G): Hardware inventory requested"
 		}
-		If($Services -and -not $Hardware)
+
+		If($Services)
 		{
 			Write-Verbose "$(Get-Date -Format G): Services requested"
 		}
@@ -7102,7 +7108,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Exit
 			}
 		}
-		Write-Verbose "$(Get-Date -Format G): $ADForest is a valid forest name"
+		Write-Verbose "$(Get-Date -Format G): `t$ADForest is a valid forest name"
 		[string]$Script:Title = "AD Inventory Report for the $ADForest Forest"
 		$Script:Domains       = $Script:Forest.Domains | Sort-Object 
 		$Script:ConfigNC      = (Get-ADRootDSE -Server $ADForest -EA 0).ConfigurationNamingContext
@@ -7110,6 +7116,7 @@ please run the script from an elevated PowerShell session using an account with 
 	
 	If($ADDomain -ne "")
 	{
+		Write-Verbose "$(Get-Date -Format G): Testing to see if $($ADDomain) is a valid domain name"
 		If([String]::IsNullOrEmpty($ComputerName))
 		{
 			$results = Get-ADDomain -Identity $ADDomain -EA 0
@@ -7151,7 +7158,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Exit
 			}
 		}
-		Write-Verbose "$(Get-Date -Format G): $ADDomain is a valid domain name"
+		Write-Verbose "$(Get-Date -Format G): `t$ADDomain is a valid domain name"
 		$Script:Domains       = $results.DNSRoot
 		$Script:DomainDNSRoot = $results.DNSRoot
 		[string]$Script:Title = "AD Inventory Report for the $Script:Domains Domain"
@@ -7200,7 +7207,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Exit
 			}
 		}
-		Write-Verbose "$(Get-Date -Format G): Found forest information for $tmp"
+		Write-Verbose "$(Get-Date -Format G): `tFound forest information for $tmp"
 		$Script:ConfigNC = (Get-ADRootDSE -Server $tmp -EA 0).ConfigurationNamingContext
 	}
 	
@@ -11399,7 +11406,7 @@ Function OutputTimeServerRegistryKeys
 		[String] $DCName
 	)
 	
-	Write-Verbose "$(Get-Date -Format G): `tTimeServer Registry Keys"
+	Write-Verbose "$(Get-Date -Format G): `t`tTimeServer Registry Keys"
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config	AnnounceFlags
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config	MaxNegPhaseCorrection
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\Config	MaxPosPhaseCorrection
@@ -11571,7 +11578,7 @@ Function OutputADFileLocations
 		[String] $DCName 
 	)
 	
-	Write-Verbose "$(Get-Date -Format G): `tAD Database, Logfile and SYSVOL locations"
+	Write-Verbose "$(Get-Date -Format G): `t`tAD Database, Logfile and SYSVOL locations"
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NTDS\Parameters	'DSA Database file'
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\NTDS\Parameters	'Database log files path'
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters	SysVol
@@ -11732,7 +11739,7 @@ Function OutputEventLogInfo
 		[String] $DCName 
 	)
 	
-	Write-Verbose "$(Get-Date -Format G): `tEvent Log Information"
+	Write-Verbose "$(Get-Date -Format G): `t`tEvent Log Information"
 	$ELInfo = $null ## New-Object System.Collections.ArrayList ## FIXME - make this an array instead of arraylist
 	
 	#V3.00 - note that we are sorted here by name, don't need to sort again later.
@@ -14319,6 +14326,9 @@ Function ProcessgGPOsByOUOld
 		[int]$NumOUs = $OUs.Count
 		[int]$OUCount = 0
 
+		#V3.03
+		Write-Verbose "$(Get-Date -Format G): `tThere are $NumOUs OUs in domain $($Domain)"
+
 		ForEach($OU in $OUs)
 		{
 			$OUCount++
@@ -14916,7 +14926,7 @@ Function getDSUsers
 	$null         = GetMaximumPasswordAge
 	$now          = Get-Date
 
-    Write-Verbose "$(Get-Date -Format G): `t`tGathering user misc data"
+    Write-Verbose "$(Get-Date -Format G): `t`tGathering user misc data #1"
 
     ## see MBS Get-myUserInfo.ps1 for the full list
     $ADS_UF_ACCOUNTDISABLE                          = 2        ### 0x2
@@ -15997,7 +16007,7 @@ Function ProcessMiscDataByDomain
 			WriteHTMLLine 2 0 "///&nbsp;&nbsp;$($txt)&nbsp;&nbsp;\\\"
 		}
 
-		Write-Verbose "$(Get-Date -Format G): `t`tGathering user misc data"
+		Write-Verbose "$(Get-Date -Format G): `t`tGathering user misc data #2"
 		
 		getDSUsers $Domain
 

@@ -13,7 +13,7 @@
 #	Added Domain SID to the Domain Information section
 #	Added SYSVOL State to Function OutputADFileLocations
 #		If SYSVOL State is not 4, highlight in red
-#	Added updates from MBS for MaxPasswordAge
+#	Added updates from Michael B. Smith for MaxPasswordAge
 #		Update Function getDSUsers
 #		Update Function GetMaximumPasswordAge
 #	Changed from using Test-Connection to Test-NetConnection -Port 88
