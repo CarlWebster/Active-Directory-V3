@@ -8,6 +8,16 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.04
+#	Only process and output Foreign Security Principal data for the Root Domain
+#	The following fixes are for running the script in a Forest with multiple domains
+#		When creating the array that contains all domain controllers, don't sort at that point as it changed the Type of the arraylist after the first domain was processed
+#			This caused the three Appendixes to only contain the data for the DCs in the first domain
+#		When outputting domain controllers, sort the DCs by domain name and DC name
+#			Put the DCs in domain name order, don't put every DC in the Root domain
+#			Change the header to reflect the actual domain name
+#		When retrieving Inherited GPOs, add the Domain name to the cmdlet
+
 #Version 3.03 22-Feb-2021
 #	Added a Try/Catch and -LDAPFilter when checking for the Exchange schema attributes to suppress the error if Exchange is not installed
 #	Added Domain SID to the Domain Information section

@@ -781,9 +781,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.03
+	VERSION: 3.04
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: February 20, 2021
+	LASTEDIT: March 6, 2021
 #>
 
 
@@ -924,6 +924,16 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.04
+#	Only process and output Foreign Security Principal data for the Root Domain
+#	The following fixes are for running the script in a Forest with multiple domains
+#		When creating the array that contains all domain controllers, don't sort at that point as it changed the Type of the arraylist after the first domain was processed
+#			This caused the three Appendixes to only contain the data for the DCs in the first domain
+#		When outputting domain controllers, sort the DCs by domain name and DC name
+#			Put the DCs in domain name order, don't put every DC in the Root domain
+#			Change the header to reflect the actual domain name
+#		When retrieving Inherited GPOs, add the Domain name to the cmdlet
 #
 #Version 3.03 22-Feb-2021
 #	Added a Try/Catch and -LDAPFilter when checking for the Exchange schema attributes to suppress the error if Exchange is not installed
@@ -1073,7 +1083,7 @@ Set-StrictMode -Version Latest
 #force on
 $PSDefaultParameterValues = @{"*:Verbose"=$True}
 $SaveEAPreference = $ErrorActionPreference
-$ErrorActionPreference = 'SilentlyContinue'
+#$ErrorActionPreference = 'SilentlyContinue'
 $global:emailCredentials = $Null
 
 ## v3.00
@@ -2184,7 +2194,7 @@ Function OutputDriveItem
 		$msg = ""
 		$columnWidths = @("150px","200px")
 		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths -tablewidth "350"
-		#WriteHTMLLine 0 0 " "
+		WriteHTMLLine 0 0 " "
 	}
 }
 
@@ -2309,7 +2319,7 @@ Function OutputProcessorItem
 		$msg = ""
 		$columnWidths = @("150px","200px")
 		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths -tablewidth "350"
-		#WriteHTMLLine 0 0 " "
+		WriteHTMLLine 0 0 " "
 	}
 }
 
@@ -2758,7 +2768,7 @@ Function OutputNicItem
 		$msg = ""
 		$columnWidths = @("150px","200px")
 		FormatHTMLTable $msg -rowarray $rowdata -columnArray $columnheaders -fixedWidth $columnWidths -tablewidth "350"
-		#WriteHTMLLine 0 0 " "
+		WriteHTMLLine 0 0 " "
 	}
 }
 #endregion
@@ -10337,7 +10347,7 @@ Function ProcessDomains
 			If($? -and $Null -ne $DomainControllers)
 			{
 				$Script:AllDomainControllers.Add($DomainControllers) > $Null
-				$Script:AllDomainControllers = $Script:AllDomainControllers | Sort-Object Name -Unique #remove duplicates now that this can be done three times
+				#$Script:AllDomainControllers = $Script:AllDomainControllers | Sort-Object Name -Unique #remove duplicates now that this can be done three times
 
 				If($MSWord -or $PDF)
 				{
@@ -10913,25 +10923,47 @@ Function ProcessDomainControllers
 {
 	Write-Verbose "$(Get-Date -Format G): Writing domain controller data"
 
-	If($MSWORD -or $PDF)
-	{
-		$Script:selection.InsertNewPage()
-		WriteWordLine 1 0 "Domain Controllers in $($Script:ForestName)"
-	}
-	If($Text)
-	{
-		Line 0 "///  Domain Controllers in $($Script:ForestName)  \\\"
-	}
-	If($HTML)
-	{
-		WriteHTMLLine 1 0 "///&nbsp;&nbsp;Domain Controllers in $($Script:ForestName)&nbsp;&nbsp;\\\"
-	}
+	#If($MSWORD -or $PDF)
+	#{
+	#	$Script:selection.InsertNewPage()
+	#	WriteWordLine 1 0 "Domain Controllers in $($Script:ForestName)"
+	#}
+	#If($Text)
+	#{
+	#	Line 0 "///  Domain Controllers in $($Script:ForestName)  \\\"
+	#}
+	#If($HTML)
+	#{
+	#	WriteHTMLLine 1 0 "///&nbsp;&nbsp;Domain Controllers in $($Script:ForestName)&nbsp;&nbsp;\\\"
+	#}
 
-	$Script:AllDomainControllers = $Script:AllDomainControllers | Sort-Object Name
+	#$Script:AllDomainControllers = $Script:AllDomainControllers | Sort-Object Name
+	$Script:AllDomainControllers = $Script:AllDomainControllers | Sort-Object Domain,Name #changed in 3.04
 	$First = $True
+	$SaveDomain = "" #added in 3.04
 
 	ForEach($DC in $Script:AllDomainControllers)
 	{
+		#3.04
+		#process DCs by domain. Don't put every DC in the root domain
+		$DomainName = $DC.Domain
+		If($SaveDomain -ne $DomainName)
+		{
+			If($MSWORD -or $PDF)
+			{
+				$Script:selection.InsertNewPage()
+				WriteWordLine 1 0 "Domain Controllers in $($DomainName)"
+			}
+			If($Text)
+			{
+				Line 0 "///  Domain Controllers in $($DomainName)  \\\"
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 1 0 "///&nbsp;&nbsp;Domain Controllers in $($DomainName)&nbsp;&nbsp;\\\"
+			}
+			$First = $True
+		}
 		Write-Verbose "$(Get-Date -Format G): `tProcessing domain controller $($DC.name)"
 		$FSMORoles = $DC.OperationMasterRoles | Sort-Object 
 		$Partitions = $DC.Partitions | Sort-Object 
@@ -14632,7 +14664,7 @@ Function ProcessgGPOsByOUNew
 			#change for 2.16
 			#work around invalid property DisplayName when the gpolinks and inheritedgpolinks collections are empty
 
-			$Results = Get-GPInheritance -target $OU.DistinguishedName -EA 0
+			$Results = Get-GPInheritance -target $OU.DistinguishedName -Domain $Domain -EA 0 #3.04 add domain
 
 			#V3.00 check for error Return, just like with Get-AdOrganizationalUnit above
 			If( !$? )
@@ -14704,7 +14736,14 @@ Function ProcessgGPOsByOUNew
 
 				$AllGPOS = $AllGPOs | Sort-Object GPOName
 
-				[int]$Rows = $AllGPOS.Length
+				If($null -eq $AllGPOS)
+				{
+					[int]$Rows = 0
+				}
+				Else
+				{
+					[int]$Rows = $AllGPOS.Length
+				}
 
 				If($MSWORD -or $PDF)
 				{
@@ -15314,42 +15353,46 @@ Function getDSUsers
 
     Write-Verbose "$(Get-Date -Format G): `t`tGetDSUsers main processing done"
 	
-	#FSP added in 3.03
-    Write-Verbose "$(Get-Date -Format G): `t`tProcessing Orphaned Foreign Security Principals"
-	
-	#https://powershell.org/forums/topic/foreign-security-principals/
-
-	# Get a list of FSPs
-	$results = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof | Sort-Object Name
-	ForEach($result in $results)
+	#3.04 only process the foreign security principals for the root domain
+	If($TrustedDomain -eq $Script:ForestRootDomain)
 	{
+
+		#FSP added in 3.03
+		Write-Verbose "$(Get-Date -Format G): `t`tProcessing Orphaned Foreign Security Principals"
 		
-		$TranslatedName = $null
-		try 
+		#https://powershell.org/forums/topic/foreign-security-principals/
+
+		# Get a list of FSPs
+		$results = Get-ADObject -Filter { objectClass -eq "foreignSecurityPrincipal" } -Properties memberof | Sort-Object Name
+		ForEach($result in $results)
 		{
-			$TranslatedName = ([System.Security.Principal.SecurityIdentifier] $result.Name).Translate([System.Security.Principal.NTAccount])
-		}
-		catch 
-		{
-			$TranslatedName = "Orphaned"
 			
-			#only need the orphans
-			$FSPGroups = ""
-			ForEach($Group in $Result.MemberOf)
+			$TranslatedName = $null
+			try 
 			{
-				$FSPGroups += $Group
+				$TranslatedName = ([System.Security.Principal.SecurityIdentifier] $result.Name).Translate([System.Security.Principal.NTAccount])
 			}
-			$obj = [PSCustomObject] @{
-				Name           = $Result.Name
-				TranslatedName = $TranslatedName
-				Groups         = $FSPGroups
+			catch 
+			{
+				$TranslatedName = "Orphaned"
+				
+				#only need the orphans
+				$FSPGroups = ""
+				ForEach($Group in $Result.MemberOf)
+				{
+					$FSPGroups += $Group
+				}
+				$obj = [PSCustomObject] @{
+					Name           = $Result.Name
+					TranslatedName = $TranslatedName
+					Groups         = $FSPGroups
+				}
+				$listOrphanedFSPs.Add($obj) > $Null
 			}
-			$listOrphanedFSPs.Add($obj) > $Null
 		}
+
+		$ctOrphanedFSPs = $listOrphanedFSPs.Count
 	}
-
-	$ctOrphanedFSPs = $listOrphanedFSPs.Count
-
     <#
 	Write-Verbose "$(Get-Date -Format G): ctUsers                $ctUsers"
     Write-Verbose "$(Get-Date -Format G): ctUsersDisabled        $ctUsersDisabled"
@@ -15448,7 +15491,10 @@ Function getDSUsers
         lx 1 'Who have a homedrive                    ' $strHomeDrive            ', ' $pctHomeDrive
         lx 1 'Who have a primary group                ' $strPrimaryGroup         ', ' $pctPrimaryGroup
         lx 1 'Who have a RDS homedrive                ' $strRDSHomeDrive         ', ' $pctRDSHomeDrive
-        lx 1 'Orphaned Foreign Security Principals    ' $strOrphanedFSPs         ', ' " N/A"
+		If($TrustedDomain -eq $Script:ForestRootDomain)
+		{
+			lx 1 'Orphaned Foreign Security Principals    ' $strOrphanedFSPs         ', ' " N/A"
+		}
         lx 0
         lx 1 '* Unknown users are user accounts with no UserAccountControl property.'
         lx 1 '  This should not occur.'
@@ -15549,12 +15595,15 @@ Function getDSUsers
 			$pctRDSHomeDrive,           $htmlwhite
 		)
 
-		$rowdata[ 11 ] = @(
-			'Orphaned Foreign Security Principals', $htmlsb,
-			 $strOrphanedFSPs,           $htmlwhite,
-			"N/A",           $htmlwhite
-		)
-
+		If($TrustedDomain -eq $Script:ForestRootDomain)
+		{
+			$rowdata[ 11 ] = @(
+				'Orphaned Foreign Security Principals', $htmlsb,
+				 $strOrphanedFSPs, $htmlwhite,
+				"N/A", $htmlwhite
+			)
+		}
+		
 		$columnWidths = @( '300px', '75px', '125px' )
 		$columnHeaders = @(
 			'Total Users', $htmlsb,
@@ -15634,7 +15683,14 @@ Function getDSUsers
 		WriteWordLine 3 0 'All Users'
 		$TableRange   = $Script:doc.Application.Selection.Range
 		[int]$Columns = 3
-		[int]$Rows = 12
+		If($TrustedDomain -eq $Script:ForestRootDomain)
+		{
+			[int]$Rows = 14
+		}
+		Else
+		{
+			[int]$Rows = 13
+		}
 		$Table = $Script:doc.Tables.Add($TableRange, $Rows, $Columns)
 		$Table.Style = $Script:MyHash.Word_TableGrid
 
@@ -15743,13 +15799,16 @@ Function getDSUsers
 		$Table.Cell(13,3).Range.ParagraphFormat.Alignment = $wdAlignParagraphRight
 		$Table.Cell(13,3).Range.Text = $pctRDSHomeDrive
 
-		$Table.Cell(14,1).Shading.BackgroundPatternColor = $wdColorGray15
-		$Table.Cell(14,1).Range.Font.Bold = $True
-		$Table.Cell(14,1).Range.Text = "Orphaned Foreign Security Principals"
-		$Table.Cell(14,2).Range.ParagraphFormat.Alignment = $wdAlignParagraphRight
-		$Table.Cell(14,2).Range.Text = $strOrphanedFSPs
-		$Table.Cell(14,3).Range.ParagraphFormat.Alignment = $wdAlignParagraphRight
-		$Table.Cell(14,3).Range.Text = "N/A"
+		If($TrustedDomain -eq $Script:ForestRootDomain)
+		{
+			$Table.Cell(14,1).Shading.BackgroundPatternColor = $wdColorGray15
+			$Table.Cell(14,1).Range.Font.Bold = $True
+			$Table.Cell(14,1).Range.Text = "Orphaned Foreign Security Principals"
+			$Table.Cell(14,2).Range.ParagraphFormat.Alignment = $wdAlignParagraphRight
+			$Table.Cell(14,2).Range.Text = $strOrphanedFSPs
+			$Table.Cell(14,3).Range.ParagraphFormat.Alignment = $wdAlignParagraphRight
+			$Table.Cell(14,3).Range.Text = "N/A"
+		}
 
 		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 		$Table.AutoFitBehavior($wdAutoFitContent)
