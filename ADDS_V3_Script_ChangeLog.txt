@@ -8,15 +8,25 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
-#Version 3.04
+#Version 3.04 24-Mar-2021
+#	Change the wording for schema extensions from "Just because a schema extension is Present does not mean it is in use."
+#		To "Just because a schema extension is Present does not mean that the product is in use."
 #	Only process and output Foreign Security Principal data for the Root Domain
+#	Only process the Appendix Domain Controller DNS Info if -DCDNSInfo is true. No need for an empty table and Appendix otherwise
+#	Removed a few warnings from the console output that were not warnings
 #	The following fixes are for running the script in a Forest with multiple domains
-#		When creating the array that contains all domain controllers, don't sort at that point as it changed the Type of the arraylist after the first domain was processed
+#		When creating the array that contains all domain controllers, don't sort after each domain as sorting changed the Type of the arraylist after the first domain was processed
 #			This caused the three Appendixes to only contain the data for the DCs in the first domain
 #		When outputting domain controllers, sort the DCs by domain name and DC name
 #			Put the DCs in domain name order, don't put every DC in the Root domain
 #			Change the header to reflect the actual domain name
 #		When retrieving Inherited GPOs, add the Domain name to the cmdlet
+#		When running in a child or tree domain, only the domain entered was used when calculating the number of domains in the forest
+#			That is now fixed
+#		When running in a child or tree domain and using -ADForest, compare the root domain's name to the name entered for -ADForest
+#			If they are not the same, abort the script and state to rerun the script with -ADDomain and not -ADForest
+#	Updated the help text
+#	Updated the ReadMe file
 
 #Version 3.03 22-Feb-2021
 #	Added a Try/Catch and -LDAPFilter when checking for the Exchange schema attributes to suppress the error if Exchange is not installed

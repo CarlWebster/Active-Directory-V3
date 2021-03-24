@@ -5,13 +5,13 @@
 
 <#
 .SYNOPSIS
-	Creates a complete inventory of a Microsoft Active Directory Forest.
+	Creates a complete inventory of a Microsoft Active Directory Forest or Domain.
 .DESCRIPTION
-	Creates a complete inventory of a Microsoft Active Directory Forest using Microsoft 
-	PowerShell, Word, plain text, or HTML.
+	Creates a complete inventory of a Microsoft Active Directory Forest or Domain using 
+	Microsoft PowerShell, Word, plain text, or HTML.
 	
 	Creates a Word or PDF document, text, or HTML file named after the Active Directory 
-	Forest.
+	Forest or Domain.
 	
 	Version 3.0 changes the default output report from Word to HTML.
 	
@@ -214,7 +214,7 @@
 		All users with Homedrive set in ADUC
 		All users whose Primary Group is not Domain Users
 		All users with RDS HomeDrive set in ADUC
-		All Names in the ForeignSecurityPrincipals container that are orphan SIDs
+		All Names in the ForeignSecurityPrincipals container that are orphan SIDs (Root domain only)
 	
 	The Text output option is limited to the first 25 characters of the SamAccountName
 	and the first 116 characters of the DistinguishedName.
@@ -239,14 +239,17 @@
 	Multiple sections are separated by a comma. -Section forest, domains
 .PARAMETER Services
 	Gather information on all services running on domain controllers.
-	Servers that are configured to automatically start but are not running will be 
+	
+	Services that are configured to automatically start but are not running will be 
 	colored in red.
-	Used on Domain Controllers only.
+	
 	This parameter requires the script be run from an elevated PowerShell session
 	using an account with permission to retrieve service information (i.e. Domain 
 	Admin).
+	
 	Selecting this parameter will add to both the time it takes to run the script and 
 	size of the report.
+	
 	This parameter is disabled by default.
 .PARAMETER MSWord
 	SaveAs DOCX file
@@ -783,7 +786,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.04
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: March 6, 2021
+	LASTEDIT: March 24, 2021
 #>
 
 
@@ -925,15 +928,26 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
-#Version 3.04
+#Version 3.04 24-Mar-2021
+#	Change the wording for schema extensions from "Just because a schema extension is Present does not mean it is in use."
+#		To "Just because a schema extension is Present does not mean that the product is in use."
 #	Only process and output Foreign Security Principal data for the Root Domain
+#	Only process the Appendix Domain Controller DNS Info if -DCDNSInfo is true. No need for an empty table and Appendix otherwise
+#	Removed a few warnings from the console output that were not warnings
 #	The following fixes are for running the script in a Forest with multiple domains
-#		When creating the array that contains all domain controllers, don't sort at that point as it changed the Type of the arraylist after the first domain was processed
+#		When creating the array that contains all domain controllers, don't sort after each domain as sorting changed the Type of the arraylist after the first domain was processed
 #			This caused the three Appendixes to only contain the data for the DCs in the first domain
 #		When outputting domain controllers, sort the DCs by domain name and DC name
 #			Put the DCs in domain name order, don't put every DC in the Root domain
 #			Change the header to reflect the actual domain name
 #		When retrieving Inherited GPOs, add the Domain name to the cmdlet
+#		When running in a child or tree domain, only the domain entered was used when calculating the number of domains in the forest
+#			That is now fixed
+#		When running in a child or tree domain and using -ADForest, compare the root domain's name to the name entered for -ADForest
+#			If they are not the same, abort the script and state to rerun the script with -ADDomain and not -ADForest
+#	Updated the help text
+#	Updated the ReadMe file
+
 #
 #Version 3.03 22-Feb-2021
 #	Added a Try/Catch and -LDAPFilter when checking for the Exchange schema attributes to suppress the error if Exchange is not installed
@@ -1088,7 +1102,7 @@ $global:emailCredentials = $Null
 
 ## v3.00
 $script:ExtraSpecialVerbose = $false
-$script:MyVersion           = '3.03'
+$script:MyVersion           = '3.04'
 
 Function wv
 {
@@ -7022,14 +7036,16 @@ please run the script from an elevated PowerShell session using an account with 
 			Write-Verbose "$(Get-Date -Format G): `tTest #1 to see if $ComputerName is a Domain Controller."
 			#the server may be online but is it really a domain controller?
 
-			#is the ComputerName in the current domain
-			$Results = Get-ADDomainController $ComputerName -EA 0
+			#is the ComputerName in the specified forest or domain
+			$Results = Get-ADDomainController -Server $ComputerName -EA 0
 			
 			If(!$? -or $Null -eq $Results)
 			{
 				#try using the Forest name
 				Write-Verbose "$(Get-Date -Format G): `tTest #2 to see if $ComputerName is a Domain Controller."
-				$Results = Get-ADDomainController $ComputerName -Server $ADForest -EA 0
+				
+				$Results = Get-ADDomainController -Server $ComputerName -Domain $ADForest -EA 0
+				
 				If(!$?)
 				{
 					$ErrorActionPreference = $SaveEAPreference
@@ -7118,10 +7134,29 @@ please run the script from an elevated PowerShell session using an account with 
 				Exit
 			}
 		}
-		Write-Verbose "$(Get-Date -Format G): `t$ADForest is a valid forest name"
-		[string]$Script:Title = "AD Inventory Report for the $ADForest Forest"
-		$Script:Domains       = $Script:Forest.Domains | Sort-Object 
-		$Script:ConfigNC      = (Get-ADRootDSE -Server $ADForest -EA 0).ConfigurationNamingContext
+		
+		#3.04 Make sure $Forest.Name matches the name passsed to -ADForest
+		If($ADForest -eq $Script:Forest.Name)
+		{
+			Write-Verbose "$(Get-Date -Format G): `t$ADForest is a valid forest name"
+			[string]$Script:Title = "AD Inventory Report for the $ADForest Forest"
+			$Script:Domains       = $Script:Forest.Domains | Sort-Object 
+			$Script:ConfigNC      = (Get-ADRootDSE -Server $ADForest -EA 0).ConfigurationNamingContext
+		}
+		Else
+		{
+			$ErrorActionPreference = $SaveEAPreference
+			Write-Error "
+		`n`n
+		$ADForest is not the name of the Forest's Root Domain of $($Script:Forest.Name).
+		`n`n
+		Run the script using -ADDomain instead of -ADForest
+		`n`n
+		Script cannot Continue.
+		`n`n
+			"
+			Exit
+		}
 	}
 	
 	If($ADDomain -ne "")
@@ -7676,7 +7711,7 @@ Function ProcessForestInformation
 			$( valMax $AppPartitions         ) +
 			$( valMax $CrossForestReferences ) +
 			1 +
-			$( valMax $script:Domains        ) +
+			$( valMax $tmpDomains2           ) + #V3.04 changed from $Script:domains to $tmpDomains2. We want all domains in the forest
 			3 +
 			$( valMax $Sites                 ) +
 			$( valMax $SPNSuffixes           ) +
@@ -8187,7 +8222,7 @@ Function ProcessCAInformation
 	If($RootCnt -eq 0 -or $Null -eq $rootObj)
 	{
 		$txt = "No Certification Authority Root(s) were retrieved"
-		Write-Warning $txt
+		#Write-Warning $txt
 		If($MSWORD -or $PDF)
 		{
 			WriteWordLine 0 0 $txt "" $Null 0 $False $True
@@ -8316,7 +8351,7 @@ Function ProcessCAInformation
 	ElseIf(([string]::isnullorempty($allObj.psbase.children)) -and ([string]::isnullorempty($rootObj.psbase.children)))
 	{
 		$txt = "No Certification Authority Issuer(s) were retrieved"
-		Write-Warning $txt
+		#Write-Warning $txt
 		If($MSWORD -or $PDF)
 		{
 			WriteWordLine 0 0 $txt '' $Null 0 $False $True
@@ -8519,7 +8554,7 @@ Function ProcessADOptionalFeatures
 	ElseIf($? -and $Null -eq $ADOptionalFeatures)
 	{
 		$txt = "No AD Optional Features were retrieved"
-		Write-Warning $txt
+		#Write-Warning $txt
 		If($MSWORD -or $PDF)
 		{
 			WriteWordLine 0 0 $txt "" $Null 0 $False $True
@@ -8581,7 +8616,7 @@ Function ProcessADSchemaItems
 	Write-Verbose "$(Get-Date -Format G): `tAD Schema Items"
 	
 	$txt = "AD Schema Items"
-	$txt1 = "Just because a schema extension is Present does not mean it is in use."
+	$txt1 = "Just because a schema extension is Present does not mean that the product is in use." #V3.04 change wording
 	If($MSWORD -or $PDF)
 	{
 		WriteWordLine 3 0 $txt
@@ -11427,6 +11462,7 @@ Function ProcessDomainControllers
 			}
 		}
 		$First = $False
+		$SaveDomain = $DomainName
 	}
 	$Script:AllDomainControllers = $Null
 } ## end Function ProcessDomainControllers
@@ -17416,7 +17452,10 @@ If($Section -eq "All" -or $Section -eq "Misc")
 If(($Section -eq "All" -or $Section -eq "Domains"))
 {
 	#V3.00 combined these three into one "If"
-	ProcessDCDNSInfo
+	If($DCDnsInfo) #V3.04, only process if DCDNSInfo is true. No need for an empty table and Appendix otherwise
+	{
+		ProcessDCDNSInfo
+	}
 	ProcessTimeServerInfo
 	ProcessEventLogInfo
 	ProcessGCCollect 'Domains-2'
