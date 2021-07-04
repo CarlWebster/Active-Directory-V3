@@ -8,6 +8,16 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.05
+#	Add fixes provided by Jorge de Almeida Pinto 
+#		Fixed the way the $Script:AllDomainControllers array is built
+#		Fixed getting Fine-grained Password policies to work in a multiple domain/child domain forest
+#	Update schema numbers for Exchange CUs
+#		"15333" = "Exchange 2016 CU19/CU20"
+#		"15334" = "Exchange 2016 CU21"
+#		"17002" = "Exchange 2019 CU8/CU9"
+#		"17003" = "Exchange 2019 CU10"
+
 #Version 3.04 24-Mar-2021
 #	Change the wording for schema extensions from "Just because a schema extension is Present does not mean it is in use."
 #		To "Just because a schema extension is Present does not mean that the product is in use."

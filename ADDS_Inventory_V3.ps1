@@ -784,9 +784,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.04
+	VERSION: 3.05
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: March 24, 2021
+	LASTEDIT: July 4, 2021
 #>
 
 
@@ -928,6 +928,16 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
+#Version 3.05
+#	Add fixes provided by Jorge de Almeida Pinto 
+#		Fixed the way the $Script:AllDomainControllers array is built
+#		Fixed getting Fine-grained Password policies to work in a multiple domain/child domain forest
+#	Update schema numbers for Exchange CUs
+#		"15333" = "Exchange 2016 CU19/CU20"
+#		"15334" = "Exchange 2016 CU21"
+#		"17002" = "Exchange 2019 CU8/CU9"
+#		"17003" = "Exchange 2019 CU10"
+
 #Version 3.04 24-Mar-2021
 #	Change the wording for schema extensions from "Just because a schema extension is Present does not mean it is in use."
 #		To "Just because a schema extension is Present does not mean that the product is in use."
@@ -1102,7 +1112,7 @@ $global:emailCredentials = $Null
 
 ## v3.00
 $script:ExtraSpecialVerbose = $false
-$script:MyVersion           = '3.04'
+$script:MyVersion           = '3.05'
 
 Function wv
 {
@@ -9549,10 +9559,12 @@ Function ProcessDomains
 	"15326" = "Exchange 2016 CU3/CU4/CU5"; #added in 2.16
 	"15330" = "Exchange 2016 CU6"; #added in 2.16
 	"15332" = "Exchange 2016 CU7 through CU18"; #added in 2.16 and updated in 2.20, updated in 2.22, updated in 2.24, updated in 3.02
-	"15333" = "Exchange 2016 CU19"; #added in 3.02
+	"15333" = "Exchange 2016 CU19/CU20"; #added in 3.02, updated in 3.05
+	"15334" = "Exchange 2016 CU21"; #added in 3.05
 	"17000" = "Exchange 2019 RTM/CU1"; #added in 2.22, updated in 2.24
 	"17001" = "Exchange 2019 CU2-CU7"; #added in 2.24, updated in 3.02
-	"17002" = "Exchange 2019 CU8"; #added in 3.02
+	"17002" = "Exchange 2019 CU8/CU9"; #added in 3.02, updated in 3.05
+	"17003" = "Exchange 2019 CU10"; #added in 3.05
 	}
 
 	ForEach($Domain in $Script:Domains)
@@ -10381,7 +10393,8 @@ Function ProcessDomains
 			
 			If($? -and $Null -ne $DomainControllers)
 			{
-				$Script:AllDomainControllers.Add($DomainControllers) > $Null
+				$DomainControllers | ForEach-Object{$Script:AllDomainControllers.Add($_) | Out-Null} #3.05 fix by Jorge de Almeida Pinto
+				#$Script:AllDomainControllers.Add($DomainControllers) > $Null # <= JORGE: HERE THE COLLETION OF OBJECTS IS ADDED AS ONE OBJECT!
 				#$Script:AllDomainControllers = $Script:AllDomainControllers | Sort-Object Name -Unique #remove duplicates now that this can be done three times
 
 				If($MSWord -or $PDF)
@@ -10593,7 +10606,8 @@ Function ProcessDomains
 							
 							$ScriptInformation += @{ Data = "Description"; Value = $FGPP.Description; }
 							
-							$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -EA 0 | Sort-Object Name
+							#$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -EA 0 | Sort-Object Name
+							$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -Server $DomainInfo.DNSRoot -EA 0 | Sort-Object Name #3.05 fix by Jorge de Almeida Pinto
 							
 							If($? -and $Null -ne $results)
 							{
@@ -10735,7 +10749,8 @@ Function ProcessDomains
 							
 							Line 1 "Description`t`t`t`t`t`t`t: " $FGPP.Description
 							
-							$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -EA 0 | Sort-Object Name
+							#$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -EA 0 | Sort-Object Name
+							$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -Server $DomainInfo.DNSRoot -EA 0 | Sort-Object Name #3.05 fix by Jorge de Almeida Pinto
 							
 							If($? -and $Null -ne $results)
 							{
@@ -10856,7 +10871,8 @@ Function ProcessDomains
 							
 							$rowdata += @(,("Description",$htmlsb,$FGPP.Description,$htmlwhite))
 							
-							$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -EA 0 | Sort-Object Name
+							#$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -EA 0 | Sort-Object Name
+							$results = Get-ADFineGrainedPasswordPolicySubject -Identity $FGPP.Name -Server $DomainInfo.DNSRoot -EA 0 | Sort-Object Name #3.05 fix by Jorge de Almeida Pinto
 							
 							If($? -and $Null -ne $results)
 							{
@@ -17468,8 +17484,8 @@ Write-Verbose "$(Get-Date -Format G): Finishing up document"
 
 If(($MSWORD -or $PDF) -and ($Script:CoverPagesExist))
 {
-	$AbstractTitle = "Microsoft Active Directory Inventory Report $MyVersion"
-	$SubjectTitle = "Active Directory Inventory Report $MyVersion"
+	$AbstractTitle = "Microsoft Active Directory Inventory Report $script:MyVersion"
+	$SubjectTitle = "Active Directory Inventory Report $script:MyVersion"
 	UpdateDocumentProperties $AbstractTitle $SubjectTitle
 }
 
