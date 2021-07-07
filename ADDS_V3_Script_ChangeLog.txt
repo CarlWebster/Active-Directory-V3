@@ -8,6 +8,46 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.05 7-Jul-2021
+#	Add fixes provided by Jorge de Almeida Pinto 
+#		Fixed the way the $Script:AllDomainControllers array is built
+#		Fixed getting Fine-grained Password policies to work in a multiple domain/child domain forest
+#	Change the CompanyName parameter so that HTML and Text output can use it. (requested by Michael B. Smith)
+#		.PARAMETER CompanyName
+#			Company Name to use for the Word Cover Page or the Forest Information section for 
+#			HTML and Text.
+#	
+#			Default value for Word output is contained in 
+#			HKCU:\Software\Microsoft\Office\Common\UserInfo\CompanyName or
+#			HKCU:\Software\Microsoft\Office\Common\UserInfo\Company, whichever is populated 
+#			on the computer running the script.
+#
+#			This parameter has an alias of CN.
+#
+#			For Word output, if either registry key does not exist and this parameter is not 
+#			specified, the report will not contain a Company Name on the cover page.
+#	
+#			For HTML and Text output, the Forest Information section will not contain the Company 
+#			Name if this parameter is not specified.
+#	For both HTML and Text output, at the end of the report add a "Report Complete" line (requested by Michael B. Smith)
+#	For Privileged Groups, add a column for SamAccountName (requested by Michael B. Smith)
+#	For the forest section, if a company name is entered, added the company name to the section title (requested by Michael B. Smith)
+#	For the section Computer Operating Systems, fix the HTML tables to have slightly wider columns (requested by Michael B. Smith)
+#	For Users with AdminCount=1, add columns for SamAccountName and Domain (requested by Michael B. Smith)
+#	Renamed items in the list of AD Schema Items (requested by Michael B. Smith)
+#		RAS Server -> NPS/RAS Server
+#		LAPS -> On-premises LAPS
+#		SCCM -> MECM/SCCM
+#		Lync/Skype for Business -> On-premises Lync/Skype for Business
+#		Exchange -> On-premises Exchange
+#	Update schema numbers for Exchange CUs
+#		"15333" = "Exchange 2016 CU19/CU20"
+#		"15334" = "Exchange 2016 CU21"
+#		"17002" = "Exchange 2019 CU8/CU9"
+#		"17003" = "Exchange 2019 CU10"
+#	Updated the help text
+#	Updated the ReadMe file
+
 #Version 3.04 24-Mar-2021
 #	Change the wording for schema extensions from "Just because a schema extension is Present does not mean it is in use."
 #		To "Just because a schema extension is Present does not mean that the product is in use."
