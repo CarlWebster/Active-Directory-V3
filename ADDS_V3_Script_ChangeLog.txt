@@ -8,6 +8,18 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.06
+#	The following fixes were requested by Jorge de Almeida Pinto
+#		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
+#		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
+#		In Function OutputEventLogInfo, add Try/Catch to Get-EventLog to catch appliances (Riverbed) with no event logs
+#		In Function OutputTimeServerRegistryKeys, check only for null to catch appliances (Riverbed) with no registry
+#		When processing DCs, add testing to see if the DC is online before processing registry keys
+#			Add an error message to console and output file
+#		When testing a DC to see if it was online, I used the wrong variable name
+#	In Function ProcessScriptEnd, always output Company Name
+#	In Function ShowScriptOptions, always output Company Name
+
 #Version 3.05 7-Jul-2021
 #	Add fixes provided by Jorge de Almeida Pinto 
 #		Fixed the way the $Script:AllDomainControllers array is built

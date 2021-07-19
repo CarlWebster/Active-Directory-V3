@@ -789,9 +789,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.05
+	VERSION: 3.06
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 7, 2021
+	LASTEDIT: July 19, 2021
 #>
 
 
@@ -932,6 +932,18 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.06
+#	The following fixes were requested by Jorge de Almeida Pinto
+#		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
+#		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
+#		In Function OutputEventLogInfo, add Try/Catch to Get-EventLog to catch appliances (Riverbed) with no event logs
+#		In Function OutputTimeServerRegistryKeys, check only for null to catch appliances (Riverbed) with no registry
+#		When processing DCs, add testing to see if the DC is online before processing registry keys
+#			Add an error message to console and output file
+#		When testing a DC to see if it was online, I used the wrong variable name
+#	In Function ProcessScriptEnd, always output Company Name
+#	In Function ShowScriptOptions, always output Company Name
 #
 #Version 3.05 7-Jul-2021
 #	Add fixes provided by Jorge de Almeida Pinto 
@@ -1353,7 +1365,7 @@ $Script:Elevated = $False
 
 #region initialize variables for word html and text
 [string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
-$Script:CoName = $CompanyName #3.05 move so this is availbel for HTML and Text output also
+$Script:CoName = $CompanyName #3.05 move so this is available for HTML and Text output also
 
 If($MSWord -or $PDF)
 {
@@ -4213,7 +4225,8 @@ Function Get-RegistryValue
 	catch
 	{
 		$e = $error[ 0 ]
-		wv "Could not open registry on computer $ComputerName ($e)"
+		#3.06, remove the verbose message as it confised some people
+		#wv "Could not open registry on computer $ComputerName ($e)"
 	}
 
 	$val = $null
@@ -6702,11 +6715,8 @@ Function ShowScriptOptions
 	Write-Verbose "$(Get-Date -Format G): "
 	Write-Verbose "$(Get-Date -Format G): "
 	Write-Verbose "$(Get-Date -Format G): AddDateTime     : $AddDateTime"
-	If($MSWORD -or $PDF)
-	{
-		Write-Verbose "$(Get-Date -Format G): Company Name    : $Script:CoName"
-	}
-	Write-Verbose "$(Get-Date -Format G): ComputerName    : $ComputerName"
+	Write-Verbose "$(Get-Date -Format G): Company Name    : $Script:CoName"
+	Write-Verbose "$(Get-Date -Format G): ComputerName    : $ComputerName"	#3.06 always output
 	If($MSWORD -or $PDF)
 	{
 		Write-Verbose "$(Get-Date -Format G): Company Address : $CompanyAddress"
@@ -11432,17 +11442,39 @@ Function ProcessDomainControllers
 		
 		If($Script:DARights -and $Script:Elevated)
 		{
-			OutputTimeServerRegistryKeys $DC.HostName
+			#3.06, add testing to see if the DC is online
+			If(Test-NetConnection -ComputerName $DC.HostName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
+			{
+				OutputTimeServerRegistryKeys $DC.HostName
 		
-			OutputADFileLocations $DC.HostName
+				OutputADFileLocations $DC.HostName
 			
-			OutputEventLogInfo $DC.HostName
+				OutputEventLogInfo $DC.HostName
+			}
+			Else
+			{
+				$txt = "$(Get-Date): `t`t$($DC.Name) is offline or unreachable.  Time Server, AD File Locations, and Event Log data is skipped."
+				Write-Verbose $txt
+				If($MSWORD -or $PDF)
+				{
+					WriteWordLine 0 0 $txt
+				}
+				If($Text)
+				{
+					Line 0 $txt
+				}
+				If($HTML)
+				{
+					WriteHTMLLine 0 0 $txt
+				}
+			}
 		}
 		
 		If($Hardware -or $Services -or $DCDNSInfo)
 		{
 			#If(Test-Connection -ComputerName $DC.HostName -quiet -EA 0)
-			If(Test-NetConnection -ComputerName $ComputerName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
+			#3.06, change from $ComputerName to $DC.HostName
+			If(Test-NetConnection -ComputerName $DC.HostName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
 			{
 				If($Hardware)
 				{
@@ -11549,9 +11581,11 @@ Function OutputTimeServerRegistryKeys
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\TimeProviders\VMICTimeProvider Enabled
 	
 	$AnnounceFlags = Get-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config" "AnnounceFlags" $DCName
-	If( $null -eq $AnnounceFlags -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#If( $null -eq $AnnounceFlags -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#3.06 check only for null to catch appliances (Riverbed) with no registry
+	If( $null -eq $AnnounceFlags )
 	{
-		## DCName can't be contacted
+		## DCName can't be contacted or DCName is an appliance with no registry
 		$AnnounceFlags = 'n/a'
 		$MaxNegPhaseCorrection = 'n/a'
 		$MaxPosPhaseCorrection = 'n/a'
@@ -11717,7 +11751,9 @@ Function OutputADFileLocations
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters	SysVol
 	
 	$DSADatabaseFile = Get-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" "DSA Database file" $DCName
-	If( $null -eq $DSADatabaseFile -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#If( $null -eq $DSADatabaseFile -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#3.06 check only for null to catch appliances (Riverbed) with no registry
+	If( $null -eq $DSADatabaseFile )
 	{
 		$DSADatabaseFile = ''
 		$DatabaseLogFilesPath = ''
@@ -11876,7 +11912,17 @@ Function OutputEventLogInfo
 	$ELInfo = $null ## New-Object System.Collections.ArrayList ## FIXME - make this an array instead of arraylist
 	
 	#V3.00 - note that we are sorted here by name, don't need to sort again later.
-	$EventLogs = Get-EventLog -List -ComputerName $DCName -EA 0 | Select-Object MaximumKilobytes, Log | Sort-Object Log 
+	#3.06 add try/catch
+	
+	try
+	{
+		$EventLogs = Get-EventLog -List -ComputerName $DCName -EA 0 | Select-Object MaximumKilobytes, Log | Sort-Object Log 
+	}
+	
+	catch
+	{
+		$EventLogs = $Null
+	}
 	
 	If($? -and $Null -ne $EventLogs)
 	{
@@ -17385,10 +17431,7 @@ Function ProcessScriptEnd
 		$SIFile = "$Script:pwdpath\ADInventoryScriptInfo_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
 		Out-File -FilePath $SIFile -InputObject "" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "Add DateTime   : $AddDateTime" 4>$Null
-		If($MSWORD -or $PDF)
-		{
-			Out-File -FilePath $SIFile -Append -InputObject "Company Name   : $Script:CoName" 4>$Null		
-		}
+		Out-File -FilePath $SIFile -Append -InputObject "Company Name   : $Script:CoName" 4>$Null	#3.06 always output
 		Out-File -FilePath $SIFile -Append -InputObject "ComputerName   : $ComputerName" 4>$Null
 		If($MSWORD -or $PDF)
 		{
