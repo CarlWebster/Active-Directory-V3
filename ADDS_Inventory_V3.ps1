@@ -791,7 +791,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.06
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 19, 2021
+	LASTEDIT: July 20, 2021
 #>
 
 
@@ -934,6 +934,15 @@ Param(
 #Version 2.0 is based on version 1.20
 #
 #Version 3.06
+#	Added by MBS, HTML codes for AlignLeft and AlignRight
+#		Update Function AddHTMLTable
+#		Update Function FormatHTMLTable
+#		Update Function getDSUsers
+#		Update Function OutputEventLogInfo
+#		Update Function ProcessEventLogInfo
+#		Update Function ProcessGroupInformation
+#		Update Function ProcessOrganizationalUnits
+#		Update Function WriteHTMLLine
 #	The following fixes were requested by Jorge de Almeida Pinto
 #		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
 #		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
@@ -1159,7 +1168,7 @@ $global:emailCredentials = $Null
 
 ## v3.00
 $script:ExtraSpecialVerbose = $false
-$script:MyVersion           = '3.05'
+$script:MyVersion           = '3.06'
 
 Function wv
 {
@@ -1457,23 +1466,25 @@ If($HTML)
 
     $global:htmlbold        = 1 4>$Null
     $global:htmlitalics     = 2 4>$Null
-    $global:htmlred         = 4 4>$Null
-    $global:htmlcyan        = 8 4>$Null
-    $global:htmlblue        = 16 4>$Null
-    $global:htmldarkblue    = 32 4>$Null
-    $global:htmllightblue   = 64 4>$Null
-    $global:htmlpurple      = 128 4>$Null
-    $global:htmlyellow      = 256 4>$Null
-    $global:htmllime        = 512 4>$Null
-    $global:htmlmagenta     = 1024 4>$Null
-    $global:htmlwhite       = 2048 4>$Null
-    $global:htmlsilver      = 4096 4>$Null
-    $global:htmlgray        = 8192 4>$Null
-    $global:htmlolive       = 16384 4>$Null
-    $global:htmlorange      = 32768 4>$Null
-    $global:htmlmaroon      = 65536 4>$Null
-    $global:htmlgreen       = 131072 4>$Null
-	$global:htmlblack       = 262144 4>$Null
+	$global:htmlAlignLeft   = 4 4>$Null	#3.06 added by MBS
+	$global:htmlAlignRight  = 8 4>$Null	#3.06 added by MBS
+    $global:htmlred         = 16 4>$Null
+    $global:htmlcyan        = 32 4>$Null
+    $global:htmlblue        = 64 4>$Null
+    $global:htmldarkblue    = 128 4>$Null
+    $global:htmllightblue   = 256 4>$Null
+    $global:htmlpurple      = 512 4>$Null
+    $global:htmlyellow      = 1024 4>$Null
+    $global:htmllime        = 2048 4>$Null
+    $global:htmlmagenta     = 4096 4>$Null
+    $global:htmlwhite       = 8192 4>$Null
+    $global:htmlsilver      = 16384 4>$Null
+    $global:htmlgray        = 32768 4>$Null
+    $global:htmlolive       = 65536 4>$Null
+    $global:htmlorange      = 131072 4>$Null
+    $global:htmlmaroon      = 262144 4>$Null
+    $global:htmlgreen       = 524288 4>$Null
+	$global:htmlblack       = 1048576 4>$Null
 
 	$global:htmlsb          = ( $htmlsilver -bor $htmlBold ) ## point optimization
 
@@ -4541,9 +4552,20 @@ Function WriteHTMLLine
 	Else
 	{
 		## #V3.00
-		[Bool] $ital = $options -band $htmlitalics
-		[Bool] $bold = $options -band $htmlBold
-		## $color = $global:htmlColor[ $options -band 0xffffc ]
+		[Bool] $ital  = $options -band $htmlitalics
+		[Bool] $bold  = $options -band $htmlBold
+		[Bool] $left  = $options -band $htmlAlignLeft
+		[Bool] $right = $options -band $htmlAlignRight
+		## $color = $global:htmlColor[ $options -band 0xfffff0 ]
+
+		if( $left )
+		{
+			$HTMLBody += " align=left"
+		}
+		elseif( $right )
+		{
+			$HTMLBody += " align=right"
+		}
 
 		## ## build the HTML output string
 ##		$HTMLBody = ''
@@ -4554,15 +4576,27 @@ Function WriteHTMLLine
 
 		Switch( $style )
 		{
-			1 { $HTMLOpen = '<h1>'; $HTMLClose = '</h1>'; Break }
-			2 { $HTMLOpen = '<h2>'; $HTMLClose = '</h2>'; Break }
-			3 { $HTMLOpen = '<h3>'; $HTMLClose = '</h3>'; Break }
-			4 { $HTMLOpen = '<h4>'; $HTMLClose = '</h4>'; Break }
+			1 { $HTMLOpen = '<h1'; $HTMLClose = '</h1>'; Break }
+			2 { $HTMLOpen = '<h2'; $HTMLClose = '</h2>'; Break }
+			3 { $HTMLOpen = '<h3'; $HTMLClose = '</h3>'; Break }
+			4 { $HTMLOpen = '<h4'; $HTMLClose = '</h4>'; Break }
 			Default { $HTMLOpen = ''; $HTMLClose = ''; Break }
 		}
 
 		## $HTMLBody += $HTMLOpen
 		$null = $sb.Append( $HTMLOpen )
+		if( $HTMLOpen.Length -gt 0 )
+		{
+			if( $left )
+			{
+				$null = $sb.Append( ' align=left' )
+			}
+			elseif( $right )
+			{
+				$null = $sb.Append( ' align=right' )
+			}
+			$null = $sb.Append( '>' )
+		}
 
 		## If($HTMLClose -eq '')
 		## {
@@ -4749,9 +4783,12 @@ Function AddHTMLTable
 			$text   = If( $item ) { $item.ToString() } Else { '' }
 			$format = If( ( $columnIndex + 1 ) -lt $subRowLength ) { $subRow[ $columnIndex + 1 ] } Else { 0 }
 			## item, text, and format ALWAYS have values, even if empty values
-			$color  = $global:htmlColor[ $format -band 0xffffc ]
-			[Bool] $bold = $format -band $htmlBold
-			[Bool] $ital = $format -band $htmlitalics
+			$color  = $global:htmlColor[ $format -band 0xfffff0 ]
+			[Bool] $bold  = $format -band $htmlBold
+			[Bool] $ital  = $format -band $htmlitalics
+			[Bool] $left  = $format -band $htmlAlignLeft
+			[Bool] $right = $format -band $htmlAlignRight		
+
 <#			
 			If( $ExtraSpecialVerbose )
 			{
@@ -4763,14 +4800,23 @@ Function AddHTMLTable
 
 			If( $fwLength -eq 0 )
 			{
-				$null = $sb.Append( "<td style=""background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>" )
+				$null = $sb.Append( "<td style=""background-color:$( $color )""" )
 				##$htmlbody += "<td style=""background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>"
 			}
 			Else
 			{
-				$null = $sb.Append( "<td style=""width:$( $fixedInfo[ $columnIndex / 2 ] ); background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>" )
+				$null = $sb.Append( "<td style=""width:$( $fixedInfo[ $columnIndex / 2 ] ); background-color:$( $color )""" )
 				##$htmlbody += "<td style=""width:$( $fixedInfo[ $columnIndex / 2 ] ); background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>"
 			}
+			if( $left )
+			{
+				$null = $sb.Append( ' align=left' )
+			}
+			elseif( $right )
+			{
+				$null = $sb.Append( ' align=right' )
+			}
+			$null = $sb.Append( "><font face='$($fontName)' size='$($fontSize)'>" )
 
 			##If( $bold ) { $htmlbody += '<b>' }
 			##If( $ital ) { $htmlbody += '<i>' }
@@ -5064,18 +5110,30 @@ Function FormatHTMLTable
 		{
 			#V3.00
 			$val = $columnArray[ $columnIndex + 1 ]
-			$tmp = $global:htmlColor[ $val -band 0xffffc ]
-			[Bool] $bold = $val -band $htmlBold
-			[Bool] $ital = $val -band $htmlitalics
+			$tmp = $global:htmlColor[ $val -band 0xfffff0 ]
+			[Bool] $bold  = $val -band $htmlBold
+			[Bool] $ital  = $val -band $htmlitalics
+			[Bool] $left  = $val -band $htmlAlignLeft
+			[Bool] $right = $val -band $htmlAlignRight		
 
 			If( $fwSize -eq 0 )
 			{
-				$HTMLBody += "<td style=""background-color:$($tmp)""><font face='$($fontName)' size='$($fontSize)'>"
+				$HTMLBody += "<td style=""background-color:$($tmp)"""
 			}
 			Else
 			{
-				$HTMLBody += "<td style=""width:$($fixedWidth[$columnIndex / 2]); background-color:$($tmp)""><font face='$($fontName)' size='$($fontSize)'>"
+				$HTMLBody += "<td style=""width:$($fixedWidth[$columnIndex / 2]); background-color:$($tmp)"""
 			}
+			if( $left )
+			{
+				$HTMLBody += " align=left"
+			}
+			elseif( $right )
+			{
+				$HTMLBody += " align=right"
+			}
+
+			$HTMLBody += "><font face='$($fontName)' size='$($fontSize)'>"
 
 			If( $bold ) { $HTMLBody += '<b>' }
 			If( $ital ) { $HTMLBody += '<i>' }
@@ -12021,7 +12079,7 @@ Function OutputEventLogInfo
 		{
 			$rowdata[ $rowIndx ] = @(
 				$Item.EventLogName, $htmlwhite,
-				$Item.EventLogSize, $htmlwhite
+				$Item.EventLogSize, ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowIndx++
 		}
@@ -12316,9 +12374,9 @@ Function ProcessOrganizationalUnits
 					$OUDisplayName,         $htmlwhite,
 					$OU.Created.ToString(), $htmlwhite,
 					$Protected,             $HTMLHighlightedCells,
-					$UserCountStr,          $htmlwhite,
-					$ComputerCountStr,      $htmlwhite,
-					$GroupCountStr,         $htmlwhite
+					$UserCountStr,          ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
+					$ComputerCountStr,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
+					$GroupCountStr,         ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 				)
 				$rowIndex++
 			}
@@ -12651,17 +12709,17 @@ Function ProcessGroupInformation
 			}
 			If($HTML)
 			{
-				$columnHeaders = @("Total Groups",$htmlsb,$TotalCountStr,$htmlwhite)
+				$columnHeaders = @("Total Groups",$htmlsb,$TotalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
 
 				$rowdata = New-Object System.Array[] 7
 				$i = 0
-				$rowdata[ $i++ ] = @("     Security Groups",$htmlsb,$SecurityCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("          Domain Local",$htmlsb,$DomainLocalCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("          Global",$htmlsb,$GlobalCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("          Universal",$htmlsb,$UniversalCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("     Distribution Groups",$htmlsb,$DistributionCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("Groups with SID History",$htmlsb,$GroupsWithSIDHistoryStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("Contacts",$htmlsb,$ContactsCountStr,$htmlwhite)
+				$rowdata[ $i++ ] = @("     Security Groups",$htmlsb,$SecurityCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("          Domain Local",$htmlsb,$DomainLocalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("          Global",$htmlsb,$GlobalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("          Universal",$htmlsb,$UniversalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("     Distribution Groups",$htmlsb,$DistributionCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("Groups with SID History",$htmlsb,$GroupsWithSIDHistoryStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("Contacts",$htmlsb,$ContactsCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
 
 				$columnWidths = @("250","75")
 				FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders -fixedWidth $columnWidths -tablewidth "325"
@@ -15730,73 +15788,73 @@ Function getDSUsers
 
 		$rowdata[ 0 ] = @(
 			'Who are unknown*', $htmlsb,
-			$strUsersUnknown,   $htmlwhite,
+			$strUsersUnknown,   ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctUsersUnknown,   $htmlwhite
 		)
 
 		$rowdata[ 1 ] = @(
 			'Who are disabled', $htmlsb,
-			$strUsersDisabled,  $htmlwhite,
+			$strUsersDisabled,  ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctUsersDisabled,  $htmlwhite
 		)
 
 		$rowdata[ 2 ] = @(
 			'Who are locked out', $htmlsb,
-			$strUsersLockedOut,   $htmlwhite,
+			$strUsersLockedOut,   ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctUsersLockedOut,   $htmlwhite
 		)
 
 		$rowdata[ 3 ]= @(
 			'With password expired', $htmlsb,
-			$strPasswordExpired,     $htmlwhite,
+			$strPasswordExpired,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPasswordExpired,     $htmlwhite
 		)
 
 		$rowdata[ 4 ] = @(
 			'With password never expires', $htmlsb,
-			$strPasswordNeverExpires,      $htmlwhite,
+			$strPasswordNeverExpires,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPasswordNeverExpires,      $htmlwhite
 		)
 
 		$rowdata[ 5 ] = @(
 			'With password not required', $htmlsb,
-			$strPasswordNotRequired,      $htmlwhite,
+			$strPasswordNotRequired,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPasswordNotRequired,      $htmlwhite
 		)
 
 		$rowdata[ 6 ] = @(
 			'Who cannot change password', $htmlsb,
-			$strCannotChangePassword,     $htmlwhite,
+			$strCannotChangePassword,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctCannotChangePassword,     $htmlwhite
 		)
 
 		$rowdata[ 7 ] = @(
 			'Who have never logged on', $htmlsb,
-			$strNolastLogonTimestamp,   $htmlwhite,
+			$strNolastLogonTimestamp,   ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctNolastLogonTimestamp,   $htmlwhite
 		)
 
 		$rowdata[ 8 ] = @(
 			'Who have SID history', $htmlsb,
-			$strHasSIDHistory,      $htmlwhite,
+			$strHasSIDHistory,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctHasSIDHistory,      $htmlwhite
 		)
 
 		$rowdata[ 9 ] = @(
 			'Who have a homedrive', $htmlsb,
-			$strHomeDrive,          $htmlwhite,
+			$strHomeDrive,          ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctHomeDrive,          $htmlwhite
 		)
 
 		$rowdata[ 10 ] = @(
 			'Who have a primary group', $htmlsb,
-			$strPrimaryGroup,           $htmlwhite,
+			$strPrimaryGroup,           ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPrimaryGroup,           $htmlwhite
 		)
 
 		$rowdata[ 11 ] = @(
 			'Who have a RDS homedrive', $htmlsb,
-			$strRDSHomeDrive,           $htmlwhite,
+			$strRDSHomeDrive,           ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctRDSHomeDrive,           $htmlwhite
 		)
 
@@ -15804,7 +15862,7 @@ Function getDSUsers
 		{
 			$rowdata[ 11 ] = @(
 				'Orphaned Foreign Security Principals', $htmlsb,
-				 $strOrphanedFSPs, $htmlwhite,
+				 $strOrphanedFSPs, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 				"N/A", $htmlwhite
 			)
 		}
@@ -15812,7 +15870,7 @@ Function getDSUsers
 		$columnWidths = @( '300px', '75px', '125px' )
 		$columnHeaders = @(
 			'Total Users', $htmlsb,
-			$strUsers,     $htmlwhite,
+			$strUsers,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			'',            $htmlwhite
 		)
 
@@ -15838,44 +15896,44 @@ Function getDSUsers
 
 		$rowdata[ 0 ] = @(
 			'Total Active Users', $htmlsb,
-			$strActiveUsers,      $htmlwhite,
+			$strActiveUsers,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActiveUsers,      $htmlwhite
 		)
 
 		$rowdata[ 1 ] = @(
 			'With password expired',   $htmlsb,
-			$strActivePasswordExpired, $htmlwhite,
+			$strActivePasswordExpired, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActivePasswordExpired, $htmlwhite
 		)
 
 		$rowdata[ 2 ] = @(
 			'With password never expires',  $htmlsb,
-			$strActivePasswordNeverExpires, $htmlwhite,
+			$strActivePasswordNeverExpires, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActivePasswordNeverExpires, $htmlwhite
 		)
 
 		$rowdata[ 3 ] = @(
 			'With password not required',  $htmlsb,
-			$strActivePasswordNotRequired, $htmlwhite,
+			$strActivePasswordNotRequired, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActivePasswordNotRequired, $htmlwhite
 		)
 
 		$rowdata[ 4 ] = @(
 			'Who cannot change password',   $htmlsb,
-			$strActiveCannotChangePassword, $htmlwhite,
+			$strActiveCannotChangePassword, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActiveCannotChangePassword, $htmlwhite
 		)
 
 		$rowdata[ 5 ] = @(
 			'Who have never logged on',     $htmlsb,
-			$strActiveNolastLogonTimestamp, $htmlwhite,
+			$strActiveNolastLogonTimestamp, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActiveNolastLogonTimestamp, $htmlwhite
 		)
 
-		$columnWidths = @( '300px', '75px', '125px' )
+		$columnWidths = @( '300px', '75px', '150px' )
 		$columnHeaders = @(
 			'Total Users', $htmlsb,
-			$strUsers,     $htmlwhite,
+			$strUsers,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			'',            $htmlwhite
 		)
 
@@ -17243,7 +17301,7 @@ Function ProcessEventLogInfo
 			$rowdata[ $rowIndx ] = @(
 				$Item.EventLogName, $htmlwhite,
 				$Item.DCName,       $htmlwhite,
-				$Item.EventLogSize, $htmlwhite
+				$Item.EventLogSize, ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowIndx++
 		}
@@ -17276,7 +17334,7 @@ Function ProcessEventLogInfo
 	}
 	If($HTML)
 	{
-		$columnWidths  = @( '300px', '150px', '100px' )
+		$columnWidths  = @( '300px', '150px', '90px' )
 		$columnHeaders = @(
 			'Event Log Name',      $htmlsb,
 			'DC Name',             $htmlsb,

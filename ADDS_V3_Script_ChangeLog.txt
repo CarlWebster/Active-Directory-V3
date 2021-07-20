@@ -9,6 +9,15 @@
 #https://www.essential.exchange/blog/
 
 #Version 3.06
+#	Added by MBS, HTML codes for AlignLeft and AlignRight
+#		Update Function AddHTMLTable
+#		Update Function FormatHTMLTable
+#		Update Function getDSUsers
+#		Update Function OutputEventLogInfo
+#		Update Function ProcessEventLogInfo
+#		Update Function ProcessGroupInformation
+#		Update Function ProcessOrganizationalUnits
+#		Update Function WriteHTMLLine
 #	The following fixes were requested by Jorge de Almeida Pinto
 #		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
 #		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
