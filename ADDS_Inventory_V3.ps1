@@ -789,9 +789,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.05
+	VERSION: 3.06
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 7, 2021
+	LASTEDIT: July 27, 2021
 #>
 
 
@@ -932,6 +932,34 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.06 27-Jul-2021
+#	Add new Function ProcessOUsForBlockedInheritance to add a report section for OUs with GPO Block Inheritance set
+#	Add new Function ProcessSYSVOLStateInfo to show the SYSVOL state for each DC as an Appendix
+#	Added by MBS, HTML codes for AlignLeft and AlignRight
+#		Update Function AddHTMLTable
+#		Update Function FormatHTMLTable
+#		Update Function Get-ComputerCountByOS
+#		Update Function getDSUsers
+#		Update Function OutputEventLogInfo
+#		Update Function ProcessEventLogInfo
+#		Update Function ProcessGroupInformation
+#		Update Function ProcessOrganizationalUnits
+#		Update Function ProcessSYSVOLStateInfo
+#		Update Function WriteHTMLLine
+#	In Function ProcessAllDCsInTheForest, change the way all domain controllers in the forest are retrieved
+#		The previous method did not always find RODC appliances
+#		Use new method given by MBS
+#	The following fixes were requested by Jorge de Almeida Pinto
+#		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
+#		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
+#		In Function OutputEventLogInfo, add Try/Catch to Get-EventLog to catch appliances (Riverbed) with no event logs
+#		In Function OutputTimeServerRegistryKeys, check only for null to catch appliances (Riverbed) with no registry
+#		When processing DCs, add testing to see if the DC is online before processing registry keys
+#			Add an error message to console and output file
+#		When testing a DC to see if it was online, I used the wrong variable name
+#	In Function ProcessScriptEnd, always output Company Name
+#	In Function ShowScriptOptions, always output Company Name
 #
 #Version 3.05 7-Jul-2021
 #	Add fixes provided by Jorge de Almeida Pinto 
@@ -1147,7 +1175,7 @@ $global:emailCredentials = $Null
 
 ## v3.00
 $script:ExtraSpecialVerbose = $false
-$script:MyVersion           = '3.05'
+$script:MyVersion           = '3.06'
 
 Function wv
 {
@@ -1345,15 +1373,16 @@ If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 	Exit
 }
 
-$Script:DCDNSIPInfo = New-Object System.Collections.ArrayList
+$Script:DCDNSIPInfo    = New-Object System.Collections.ArrayList
 $Script:DCEventLogInfo = New-Object System.Collections.ArrayList
 $Script:TimeServerInfo = New-Object System.Collections.ArrayList
-$Script:DARights = $False
-$Script:Elevated = $False
+$Script:DCSYSVOLState  = New-Object System.Collections.ArrayList
+$Script:DARights       = $False
+$Script:Elevated       = $False
 
 #region initialize variables for word html and text
 [string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
-$Script:CoName = $CompanyName #3.05 move so this is availbel for HTML and Text output also
+$Script:CoName = $CompanyName #3.05 move so this is available for HTML and Text output also
 
 If($MSWord -or $PDF)
 {
@@ -1445,23 +1474,25 @@ If($HTML)
 
     $global:htmlbold        = 1 4>$Null
     $global:htmlitalics     = 2 4>$Null
-    $global:htmlred         = 4 4>$Null
-    $global:htmlcyan        = 8 4>$Null
-    $global:htmlblue        = 16 4>$Null
-    $global:htmldarkblue    = 32 4>$Null
-    $global:htmllightblue   = 64 4>$Null
-    $global:htmlpurple      = 128 4>$Null
-    $global:htmlyellow      = 256 4>$Null
-    $global:htmllime        = 512 4>$Null
-    $global:htmlmagenta     = 1024 4>$Null
-    $global:htmlwhite       = 2048 4>$Null
-    $global:htmlsilver      = 4096 4>$Null
-    $global:htmlgray        = 8192 4>$Null
-    $global:htmlolive       = 16384 4>$Null
-    $global:htmlorange      = 32768 4>$Null
-    $global:htmlmaroon      = 65536 4>$Null
-    $global:htmlgreen       = 131072 4>$Null
-	$global:htmlblack       = 262144 4>$Null
+	$global:htmlAlignLeft   = 4 4>$Null	#3.06 added by MBS
+	$global:htmlAlignRight  = 8 4>$Null	#3.06 added by MBS
+    $global:htmlred         = 16 4>$Null
+    $global:htmlcyan        = 32 4>$Null
+    $global:htmlblue        = 64 4>$Null
+    $global:htmldarkblue    = 128 4>$Null
+    $global:htmllightblue   = 256 4>$Null
+    $global:htmlpurple      = 512 4>$Null
+    $global:htmlyellow      = 1024 4>$Null
+    $global:htmllime        = 2048 4>$Null
+    $global:htmlmagenta     = 4096 4>$Null
+    $global:htmlwhite       = 8192 4>$Null
+    $global:htmlsilver      = 16384 4>$Null
+    $global:htmlgray        = 32768 4>$Null
+    $global:htmlolive       = 65536 4>$Null
+    $global:htmlorange      = 131072 4>$Null
+    $global:htmlmaroon      = 262144 4>$Null
+    $global:htmlgreen       = 524288 4>$Null
+	$global:htmlblack       = 1048576 4>$Null
 
 	$global:htmlsb          = ( $htmlsilver -bor $htmlBold ) ## point optimization
 
@@ -4213,7 +4244,8 @@ Function Get-RegistryValue
 	catch
 	{
 		$e = $error[ 0 ]
-		wv "Could not open registry on computer $ComputerName ($e)"
+		#3.06, remove the verbose message as it confised some people
+		#wv "Could not open registry on computer $ComputerName ($e)"
 	}
 
 	$val = $null
@@ -4528,9 +4560,20 @@ Function WriteHTMLLine
 	Else
 	{
 		## #V3.00
-		[Bool] $ital = $options -band $htmlitalics
-		[Bool] $bold = $options -band $htmlBold
-		## $color = $global:htmlColor[ $options -band 0xffffc ]
+		[Bool] $ital  = $options -band $htmlitalics
+		[Bool] $bold  = $options -band $htmlBold
+		[Bool] $left  = $options -band $htmlAlignLeft
+		[Bool] $right = $options -band $htmlAlignRight
+		## $color = $global:htmlColor[ $options -band 0xfffff0 ]
+
+		if( $left )
+		{
+			$HTMLBody += " align=left"
+		}
+		elseif( $right )
+		{
+			$HTMLBody += " align=right"
+		}
 
 		## ## build the HTML output string
 ##		$HTMLBody = ''
@@ -4541,15 +4584,27 @@ Function WriteHTMLLine
 
 		Switch( $style )
 		{
-			1 { $HTMLOpen = '<h1>'; $HTMLClose = '</h1>'; Break }
-			2 { $HTMLOpen = '<h2>'; $HTMLClose = '</h2>'; Break }
-			3 { $HTMLOpen = '<h3>'; $HTMLClose = '</h3>'; Break }
-			4 { $HTMLOpen = '<h4>'; $HTMLClose = '</h4>'; Break }
+			1 { $HTMLOpen = '<h1'; $HTMLClose = '</h1>'; Break }
+			2 { $HTMLOpen = '<h2'; $HTMLClose = '</h2>'; Break }
+			3 { $HTMLOpen = '<h3'; $HTMLClose = '</h3>'; Break }
+			4 { $HTMLOpen = '<h4'; $HTMLClose = '</h4>'; Break }
 			Default { $HTMLOpen = ''; $HTMLClose = ''; Break }
 		}
 
 		## $HTMLBody += $HTMLOpen
 		$null = $sb.Append( $HTMLOpen )
+		if( $HTMLOpen.Length -gt 0 )
+		{
+			if( $left )
+			{
+				$null = $sb.Append( ' align=left' )
+			}
+			elseif( $right )
+			{
+				$null = $sb.Append( ' align=right' )
+			}
+			$null = $sb.Append( '>' )
+		}
 
 		## If($HTMLClose -eq '')
 		## {
@@ -4736,9 +4791,12 @@ Function AddHTMLTable
 			$text   = If( $item ) { $item.ToString() } Else { '' }
 			$format = If( ( $columnIndex + 1 ) -lt $subRowLength ) { $subRow[ $columnIndex + 1 ] } Else { 0 }
 			## item, text, and format ALWAYS have values, even if empty values
-			$color  = $global:htmlColor[ $format -band 0xffffc ]
-			[Bool] $bold = $format -band $htmlBold
-			[Bool] $ital = $format -band $htmlitalics
+			$color  = $global:htmlColor[ $format -band 0xfffff0 ]
+			[Bool] $bold  = $format -band $htmlBold
+			[Bool] $ital  = $format -band $htmlitalics
+			[Bool] $left  = $format -band $htmlAlignLeft
+			[Bool] $right = $format -band $htmlAlignRight		
+
 <#			
 			If( $ExtraSpecialVerbose )
 			{
@@ -4750,14 +4808,23 @@ Function AddHTMLTable
 
 			If( $fwLength -eq 0 )
 			{
-				$null = $sb.Append( "<td style=""background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>" )
+				$null = $sb.Append( "<td style=""background-color:$( $color )""" )
 				##$htmlbody += "<td style=""background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>"
 			}
 			Else
 			{
-				$null = $sb.Append( "<td style=""width:$( $fixedInfo[ $columnIndex / 2 ] ); background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>" )
+				$null = $sb.Append( "<td style=""width:$( $fixedInfo[ $columnIndex / 2 ] ); background-color:$( $color )""" )
 				##$htmlbody += "<td style=""width:$( $fixedInfo[ $columnIndex / 2 ] ); background-color:$( $color )""><font face='$( $fontName )' size='$( $fontSize )'>"
 			}
+			if( $left )
+			{
+				$null = $sb.Append( ' align=left' )
+			}
+			elseif( $right )
+			{
+				$null = $sb.Append( ' align=right' )
+			}
+			$null = $sb.Append( "><font face='$($fontName)' size='$($fontSize)'>" )
 
 			##If( $bold ) { $htmlbody += '<b>' }
 			##If( $ital ) { $htmlbody += '<i>' }
@@ -5051,18 +5118,30 @@ Function FormatHTMLTable
 		{
 			#V3.00
 			$val = $columnArray[ $columnIndex + 1 ]
-			$tmp = $global:htmlColor[ $val -band 0xffffc ]
-			[Bool] $bold = $val -band $htmlBold
-			[Bool] $ital = $val -band $htmlitalics
+			$tmp = $global:htmlColor[ $val -band 0xfffff0 ]
+			[Bool] $bold  = $val -band $htmlBold
+			[Bool] $ital  = $val -band $htmlitalics
+			[Bool] $left  = $val -band $htmlAlignLeft
+			[Bool] $right = $val -band $htmlAlignRight		
 
 			If( $fwSize -eq 0 )
 			{
-				$HTMLBody += "<td style=""background-color:$($tmp)""><font face='$($fontName)' size='$($fontSize)'>"
+				$HTMLBody += "<td style=""background-color:$($tmp)"""
 			}
 			Else
 			{
-				$HTMLBody += "<td style=""width:$($fixedWidth[$columnIndex / 2]); background-color:$($tmp)""><font face='$($fontName)' size='$($fontSize)'>"
+				$HTMLBody += "<td style=""width:$($fixedWidth[$columnIndex / 2]); background-color:$($tmp)"""
 			}
+			if( $left )
+			{
+				$HTMLBody += " align=left"
+			}
+			elseif( $right )
+			{
+				$HTMLBody += " align=right"
+			}
+
+			$HTMLBody += "><font face='$($fontName)' size='$($fontSize)'>"
 
 			If( $bold ) { $HTMLBody += '<b>' }
 			If( $ital ) { $HTMLBody += '<i>' }
@@ -6614,38 +6693,38 @@ Function Get-ComputerCountByOS
 
 			$rowdata[ 0 ] = @(
 				'Total Stale Computer Objects (count)', $htmlsb,
-				$TotalStaleObjects.ToString(), $htmlwhite
+				$TotalStaleObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 1 ] = @(
 				'Total Stale Computer Objects (percent)',$htmlsb,
-				$percent, $htmlwhite
+				$percent, ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 2 ] = @(
 				'Total Enabled Computer Objects', $htmlsb,
-				$TotalEnabledObjects.ToString(), $htmlwhite
+				$TotalEnabledObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 3 ] = @(
 				'Total Enabled Stale Computer Objects', $htmlsb,
-				$TotalEnabledStaleObjects.ToString(), $htmlwhite
+				$TotalEnabledStaleObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 4 ] = @(
 				'Total Active Computer Objects', $htmlsb,
-				$( $TotalEnabledObjects - $TotalEnabledStaleObjects ), $htmlwhite
+				$( $TotalEnabledObjects - $TotalEnabledStaleObjects ), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 5 ] = @(
 				'Total Disabled Computer Objects', $htmlsb,
-				$TotalDisabledObjects.ToString(), $htmlwhite
+				$TotalDisabledObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 6 ] = @(
 				'Total Disabled Stale Computer Objects', $htmlsb,
-				$TotalDisabledStaleObjects.ToString(), $htmlwhite
+				$TotalDisabledStaleObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 
 			$msg           = "A breakdown of the $ComputerCount Computer Objects in the $domain Domain"
 			$columnWidths  = @( '400px', '50px' )
 			$columnHeaders = @(
 				'Total Computer Objects',  $htmlsb,
-				$ComputerCount.ToString(), $htmlwhite
+				$ComputerCount.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 
 			FormatHTMLTable -tableHeader $msg `
@@ -6702,11 +6781,8 @@ Function ShowScriptOptions
 	Write-Verbose "$(Get-Date -Format G): "
 	Write-Verbose "$(Get-Date -Format G): "
 	Write-Verbose "$(Get-Date -Format G): AddDateTime     : $AddDateTime"
-	If($MSWORD -or $PDF)
-	{
-		Write-Verbose "$(Get-Date -Format G): Company Name    : $Script:CoName"
-	}
-	Write-Verbose "$(Get-Date -Format G): ComputerName    : $ComputerName"
+	Write-Verbose "$(Get-Date -Format G): Company Name    : $Script:CoName"
+	Write-Verbose "$(Get-Date -Format G): ComputerName    : $ComputerName"	#3.06 always output
 	If($MSWORD -or $PDF)
 	{
 		Write-Verbose "$(Get-Date -Format G): Company Address : $CompanyAddress"
@@ -8026,6 +8102,8 @@ Function ProcessAllDCsInTheForest
 	#http://msdn.microsoft.com/en-us/library/vstudio/system.directoryservices.activedirectory.forest.getforest%28v=vs.90%29
 	#$ADContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("forest", $ADForest) 
 	#2.16 change
+	
+	<# 3.06 change
 	$ADContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("forest", $Script:Forest.Name)
 	$Forest2 = [system.directoryservices.activedirectory.Forest]::GetForest($ADContext)
 	Write-Verbose "$(Get-Date -Format G): `t`tBuild list of Domain controllers in the Forest"
@@ -8034,6 +8112,48 @@ Function ProcessAllDCsInTheForest
 	$AllDCs = @( $AllDCs | Sort-Object )
 	$ADContext = $Null
 	$Forest2 = $Null
+	#>
+	
+	#new code added in 3.06 from MBS
+	$Domains = $Script:Forest.domains
+	$AllDCs = New-Object System.Collections.ArrayList
+	
+	ForEach($Domain in $Domains)
+	{
+		$sourceEntry        = New-Object System.Directoryservices.DirectoryEntry( "LDAP://$Domain" )
+		$source             = New-Object System.Directoryservices.DirectorySearcher( $sourceEntry )
+		$source.SearchScope = 'Subtree'
+		$source.PageSize    = 1000
+
+		$domainController = '805306369'
+		$serverTrust      = ( 0x0080000 ).ToString()  # SERVER_TRUST_ACCOUNT
+		$trustDelegate    = ( 0x0002000 ).ToString()  # TRUSTED_FOR_DELEGATION
+		$partialSecrets   = ( 0x4000000 ).ToString()  # PARTIAL_SECRETS_ACCOUNT (RODC)
+		$bitMask          = $serverTrust -bor $trustDelegate
+
+		$groupDC   = 516
+		$groupRODC = 521
+
+		$source.Filter  = "(&(sAMAccountType=$domainController)(|(userAccountControl:1.2.840.113556.1.4.803:=$bitMask)(userAccountControl:1.2.840.113556.1.4.803:=$partialSecrets)))"
+
+		$Results = $source.FindAll()
+
+		ForEach($Result in $Results)
+		{
+			$null = $AllDCs.Add($Result.Properties.Item('dnshostname'))
+		}
+
+		If( $Results )
+		{
+			$Results.Dispose() 
+		}
+		
+		$source.Dispose()
+		$sourceEntry.Dispose()
+	}
+
+	$AllDCs = @( $AllDCs | Sort-Object )
+	#end of new 3.06 code
 
 	If($Null -eq $AllDCs)
 	{
@@ -8062,7 +8182,17 @@ Function ProcessAllDCsInTheForest
 		}
 		If($Text)
 		{
-			[int]$MaxDCNameLength = ($AllDCs | Measure-Object -Maximum -Property Length).Maximum
+			# no longer works after 3.06 changes [int]$MaxDCNameLength = ($AllDCs | Measure-Object -Maximum -Property Length).Maximum
+			#use this loop instead
+			[int]$MaxDCNameLength = 0
+
+			ForEach($item in $AllDCs)
+			{
+				If($item.Length -gt $MaxDCNameLength)
+				{
+					$MaxDCNameLength = $item.Length
+				}
+			}
 			
 			If($MaxDCNameLength -gt 4) #4 is length of "Name"
 			{
@@ -11432,17 +11562,39 @@ Function ProcessDomainControllers
 		
 		If($Script:DARights -and $Script:Elevated)
 		{
-			OutputTimeServerRegistryKeys $DC.HostName
+			#3.06, add testing to see if the DC is online
+			If(Test-NetConnection -ComputerName $DC.HostName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
+			{
+				OutputTimeServerRegistryKeys $DC.HostName
 		
-			OutputADFileLocations $DC.HostName
+				OutputADFileLocations $DC.HostName
 			
-			OutputEventLogInfo $DC.HostName
+				OutputEventLogInfo $DC.HostName
+			}
+			Else
+			{
+				$txt = "$(Get-Date): `t`t$($DC.Name) is offline or unreachable.  Time Server, AD File Locations, and Event Log data is skipped."
+				Write-Verbose $txt
+				If($MSWORD -or $PDF)
+				{
+					WriteWordLine 0 0 $txt
+				}
+				If($Text)
+				{
+					Line 0 $txt
+				}
+				If($HTML)
+				{
+					WriteHTMLLine 0 0 $txt
+				}
+			}
 		}
 		
 		If($Hardware -or $Services -or $DCDNSInfo)
 		{
 			#If(Test-Connection -ComputerName $DC.HostName -quiet -EA 0)
-			If(Test-NetConnection -ComputerName $ComputerName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
+			#3.06, change from $ComputerName to $DC.HostName
+			If(Test-NetConnection -ComputerName $DC.HostName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
 			{
 				If($Hardware)
 				{
@@ -11549,9 +11701,11 @@ Function OutputTimeServerRegistryKeys
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\W32Time\TimeProviders\VMICTimeProvider Enabled
 	
 	$AnnounceFlags = Get-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Services\W32Time\Config" "AnnounceFlags" $DCName
-	If( $null -eq $AnnounceFlags -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#If( $null -eq $AnnounceFlags -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#3.06 check only for null to catch appliances (Riverbed) with no registry
+	If( $null -eq $AnnounceFlags )
 	{
-		## DCName can't be contacted
+		## DCName can't be contacted or DCName is an appliance with no registry
 		$AnnounceFlags = 'n/a'
 		$MaxNegPhaseCorrection = 'n/a'
 		$MaxPosPhaseCorrection = 'n/a'
@@ -11717,7 +11871,9 @@ Function OutputADFileLocations
 	#HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters	SysVol
 	
 	$DSADatabaseFile = Get-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters" "DSA Database file" $DCName
-	If( $null -eq $DSADatabaseFile -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#If( $null -eq $DSADatabaseFile -and $error.Count -gt 0 -and $error[ 0 ].Exception.HResult -eq -2146233087 )
+	#3.06 check only for null to catch appliances (Riverbed) with no registry
+	If( $null -eq $DSADatabaseFile )
 	{
 		$DSADatabaseFile = ''
 		$DatabaseLogFilesPath = ''
@@ -11757,9 +11913,17 @@ Function OutputADFileLocations
 		}
 		Else
 		{
-			$SysvolState  = "Unable to determine the SYSVOL State: $($Result.State)"
+			#$SysvolState  = "Unable to determine the SYSVOL State: $($Result.State)"
+			$SysvolState  = "Unable to determine the SYSVOL State" #changed in 3.06, if $Result is null or an error happened, there is no State property
 		}
 	}
+
+	$obj = [PSCustomObject] @{
+		DCName = $DCName
+		SYSVOLState = $SysvolState
+	}
+
+	$null = $Script:DCSYSVOLState.Add( $obj )
 
 	If( $DSADatabaseFile -and $DSADatabaseFile.Length -gt 0 )
 	{
@@ -11876,7 +12040,17 @@ Function OutputEventLogInfo
 	$ELInfo = $null ## New-Object System.Collections.ArrayList ## FIXME - make this an array instead of arraylist
 	
 	#V3.00 - note that we are sorted here by name, don't need to sort again later.
-	$EventLogs = Get-EventLog -List -ComputerName $DCName -EA 0 | Select-Object MaximumKilobytes, Log | Sort-Object Log 
+	#3.06 add try/catch
+	
+	try
+	{
+		$EventLogs = Get-EventLog -List -ComputerName $DCName -EA 0 | Select-Object MaximumKilobytes, Log | Sort-Object Log 
+	}
+	
+	catch
+	{
+		$EventLogs = $Null
+	}
 	
 	If($? -and $Null -ne $EventLogs)
 	{
@@ -11975,7 +12149,7 @@ Function OutputEventLogInfo
 		{
 			$rowdata[ $rowIndx ] = @(
 				$Item.EventLogName, $htmlwhite,
-				$Item.EventLogSize, $htmlwhite
+				$Item.EventLogSize, ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowIndx++
 		}
@@ -12270,9 +12444,9 @@ Function ProcessOrganizationalUnits
 					$OUDisplayName,         $htmlwhite,
 					$OU.Created.ToString(), $htmlwhite,
 					$Protected,             $HTMLHighlightedCells,
-					$UserCountStr,          $htmlwhite,
-					$ComputerCountStr,      $htmlwhite,
-					$GroupCountStr,         $htmlwhite
+					$UserCountStr,          ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
+					$ComputerCountStr,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
+					$GroupCountStr,         ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 				)
 				$rowIndex++
 			}
@@ -12605,17 +12779,17 @@ Function ProcessGroupInformation
 			}
 			If($HTML)
 			{
-				$columnHeaders = @("Total Groups",$htmlsb,$TotalCountStr,$htmlwhite)
+				$columnHeaders = @("Total Groups",$htmlsb,$TotalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
 
 				$rowdata = New-Object System.Array[] 7
 				$i = 0
-				$rowdata[ $i++ ] = @("     Security Groups",$htmlsb,$SecurityCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("          Domain Local",$htmlsb,$DomainLocalCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("          Global",$htmlsb,$GlobalCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("          Universal",$htmlsb,$UniversalCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("     Distribution Groups",$htmlsb,$DistributionCountStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("Groups with SID History",$htmlsb,$GroupsWithSIDHistoryStr,$htmlwhite)
-				$rowdata[ $i++ ] = @("Contacts",$htmlsb,$ContactsCountStr,$htmlwhite)
+				$rowdata[ $i++ ] = @("     Security Groups",$htmlsb,$SecurityCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("          Domain Local",$htmlsb,$DomainLocalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("          Global",$htmlsb,$GlobalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("          Universal",$htmlsb,$UniversalCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("     Distribution Groups",$htmlsb,$DistributionCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("Groups with SID History",$htmlsb,$GroupsWithSIDHistoryStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
+				$rowdata[ $i++ ] = @("Contacts",$htmlsb,$ContactsCountStr,( $htmlwhite -bor $global:htmlAlignRight )) #3.06 add alignright
 
 				$columnWidths = @("250","75")
 				FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders -fixedWidth $columnWidths -tablewidth "325"
@@ -14986,6 +15160,202 @@ Function ProcessgGPOsByOUNew
 } ## end Function ProcessgGPOsByOUNew
 #endregion
 
+#region OUs by domain for Blocked Inheritance
+Function ProcessOUsForBlockedInheritance
+{
+	Write-Verbose "$(Get-Date -Format G): Writing OUs with GPO Blocked Inheritance"
+
+	If($MSWORD -or $PDF)
+	{
+		$Script:selection.InsertNewPage()
+		WriteWordLine 1 0 "OUs with GPO Blocked Inheritance"
+	}
+	If($Text)
+	{
+		Line 0 "///  OUs with GPO Blocked Inheritance  \\\"
+	}
+	If($HTML)
+	{
+		WriteHTMLLine 1 0 "///&nbsp;&nbsp;OUs with GPO Blocked Inheritance&nbsp;&nbsp;\\\"
+	}
+	$First = $True
+
+	ForEach($Domain in $Script:Domains)
+	{
+		Write-Verbose "$(Get-Date -Format G): `tProcessing OUs with GPO Blocked Inheritance for domain $($Domain)"
+
+		$DomainInfo = Get-ADDomain -Identity $Domain -EA 0 
+
+		If( !$? )
+		{
+			$txt = "Error retrieving domain data for domain $($Domain)"
+			Write-Warning $txt
+			If($MSWORD -or $PDF)
+			{
+				WriteWordLine 0 0 $txt '' $Null 0 $False $True
+			}
+			If($Text)
+			{
+				Line 0 $txt
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 0 0 $txt
+			}
+
+			Continue
+		}
+
+		If( $null -eq $DomainInfo )
+		{
+			$txt = "No Domain data was retrieved for domain $($Domain)"
+			If($MSWORD -or $PDF)
+			{
+				WriteWordLine 0 0 $txt "" $Null 0 $False $True
+			}
+			If($Text)
+			{
+				Line 0 $txt
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 0 0 $txt
+			}
+
+			Continue
+		}
+
+		If(($MSWORD -or $PDF) -and !$First)
+		{
+			#put each domain, starting with the second, on a new page
+			$Script:selection.InsertNewPage()
+		}
+
+		$txt = $Domain
+		If($Domain -eq $Script:ForestRootDomain)
+		{
+			$txt += ' (Forest Root)'
+		}
+
+		If($MSWORD -or $PDF)
+		{
+			WriteWordLine 2 0 $txt
+			WriteWordLine 3 0 "OUs with Blocked Inheritance" 
+		}
+		If($Text)
+		{
+			Line 1 "///  $($txt)  \\\"
+			Line 1 "OUs with Blocked Inheritance" 
+		}
+		If($HTML)
+		{
+			WriteHTMLLine 2 0 "///&nbsp;&nbsp;$($txt)&nbsp;&nbsp;\\\"
+			WriteHTMLLine 3 0 "OUs with Blocked Inheritance" 
+		}
+
+		Write-Verbose "$(Get-Date -Format G): `t`tGetting OUs with Blocked Inheritance"
+
+		$DomainName = $DomainInfo.Name
+		$DomainFQDN = $DomainInfo.DNSRoot
+		
+		$source             = New-Object System.DirectoryServices.DirectorySearcher( "LDAP://$DomainName" )
+		$source.SearchScope = 'Subtree'
+		$source.PageSize    = 1000
+		$source.filter      = '(&(objectclass=OrganizationalUnit)(gpoptions=1))'
+
+		$BlockedOUs = $source.findall()
+		
+		If($Null -eq $BlockedOUs)
+		{
+			If($MSWORD -or $PDF)
+			{
+				WriteWordLine 0 0 "<None>"
+			}
+			If($Text)
+			{
+				Line 2 "<None>"
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 0 0 "None"
+			}
+		}
+		Else
+		{
+			$OUArray = New-Object System.Collections.ArrayList
+			
+			ForEach($Item in $BlockedOUs)
+			{
+				$obj = [PSCustomObject] @{
+					OUName = $Item.Properties.Item('distinguishedname')
+				}
+
+				$null = $OUArray.Add( $obj )
+			}
+			
+			$OUArray = @($OUArray | Sort-Object OUName)
+			
+			If($MSWORD -or $PDF)
+			{
+				$ItemsWordTable = New-Object System.Collections.ArrayList
+				ForEach($Item in $OUArray)
+				{
+					## Add the required key/values to the hashtable
+					$WordTableRowHash = @{ 
+						OUName = $Item.OUName
+					}
+
+					## Add the hash to the array
+					$ItemsWordTable.Add($WordTableRowHash) > $Null
+				}
+
+				$Table = AddWordTable -Hashtable $ItemsWordTable `
+				-Columns OUName `
+				-Headers "OU Name" `
+				-Format $wdTableGrid `
+				-AutoFit $wdAutoFitFixed
+
+				SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+
+				$Table.Columns.Item(1).Width = 300
+
+				$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+
+				FindWordDocumentEnd
+				$Table = $Null
+			}
+			If($Text)
+			{
+				ForEach($Item in $OUArray)
+				{
+					Line 2 $Item.OUName
+				}
+				Line 0 ""
+			}
+			If($HTML)
+			{
+				$rowData = @()
+
+				ForEach($Item in $OUArray)
+				{
+					$rowdata += @(,($Item.OUName,$htmlwhite))
+				}
+
+				$columnHeaders = @( 'OU Name', $htmlsb )
+
+				FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders
+				WriteHTMLLine 0 0 ''
+
+				$rowData = $null
+			}
+
+			$OUArray = $Null
+		}
+		$First = $False
+	}
+} ## end Function ProcessGPOsByDomain
+#endregion
+
 #region misc info by domain
 ## added for v3.00
 $TsHomeDrive  = 'TerminalServicesHomeDrive'
@@ -15684,73 +16054,73 @@ Function getDSUsers
 
 		$rowdata[ 0 ] = @(
 			'Who are unknown*', $htmlsb,
-			$strUsersUnknown,   $htmlwhite,
+			$strUsersUnknown,   ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctUsersUnknown,   $htmlwhite
 		)
 
 		$rowdata[ 1 ] = @(
 			'Who are disabled', $htmlsb,
-			$strUsersDisabled,  $htmlwhite,
+			$strUsersDisabled,  ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctUsersDisabled,  $htmlwhite
 		)
 
 		$rowdata[ 2 ] = @(
 			'Who are locked out', $htmlsb,
-			$strUsersLockedOut,   $htmlwhite,
+			$strUsersLockedOut,   ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctUsersLockedOut,   $htmlwhite
 		)
 
 		$rowdata[ 3 ]= @(
 			'With password expired', $htmlsb,
-			$strPasswordExpired,     $htmlwhite,
+			$strPasswordExpired,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPasswordExpired,     $htmlwhite
 		)
 
 		$rowdata[ 4 ] = @(
 			'With password never expires', $htmlsb,
-			$strPasswordNeverExpires,      $htmlwhite,
+			$strPasswordNeverExpires,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPasswordNeverExpires,      $htmlwhite
 		)
 
 		$rowdata[ 5 ] = @(
 			'With password not required', $htmlsb,
-			$strPasswordNotRequired,      $htmlwhite,
+			$strPasswordNotRequired,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPasswordNotRequired,      $htmlwhite
 		)
 
 		$rowdata[ 6 ] = @(
 			'Who cannot change password', $htmlsb,
-			$strCannotChangePassword,     $htmlwhite,
+			$strCannotChangePassword,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctCannotChangePassword,     $htmlwhite
 		)
 
 		$rowdata[ 7 ] = @(
 			'Who have never logged on', $htmlsb,
-			$strNolastLogonTimestamp,   $htmlwhite,
+			$strNolastLogonTimestamp,   ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctNolastLogonTimestamp,   $htmlwhite
 		)
 
 		$rowdata[ 8 ] = @(
 			'Who have SID history', $htmlsb,
-			$strHasSIDHistory,      $htmlwhite,
+			$strHasSIDHistory,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctHasSIDHistory,      $htmlwhite
 		)
 
 		$rowdata[ 9 ] = @(
 			'Who have a homedrive', $htmlsb,
-			$strHomeDrive,          $htmlwhite,
+			$strHomeDrive,          ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctHomeDrive,          $htmlwhite
 		)
 
 		$rowdata[ 10 ] = @(
 			'Who have a primary group', $htmlsb,
-			$strPrimaryGroup,           $htmlwhite,
+			$strPrimaryGroup,           ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctPrimaryGroup,           $htmlwhite
 		)
 
 		$rowdata[ 11 ] = @(
 			'Who have a RDS homedrive', $htmlsb,
-			$strRDSHomeDrive,           $htmlwhite,
+			$strRDSHomeDrive,           ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctRDSHomeDrive,           $htmlwhite
 		)
 
@@ -15758,7 +16128,7 @@ Function getDSUsers
 		{
 			$rowdata[ 11 ] = @(
 				'Orphaned Foreign Security Principals', $htmlsb,
-				 $strOrphanedFSPs, $htmlwhite,
+				 $strOrphanedFSPs, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 				"N/A", $htmlwhite
 			)
 		}
@@ -15766,7 +16136,7 @@ Function getDSUsers
 		$columnWidths = @( '300px', '75px', '125px' )
 		$columnHeaders = @(
 			'Total Users', $htmlsb,
-			$strUsers,     $htmlwhite,
+			$strUsers,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			'',            $htmlwhite
 		)
 
@@ -15792,44 +16162,44 @@ Function getDSUsers
 
 		$rowdata[ 0 ] = @(
 			'Total Active Users', $htmlsb,
-			$strActiveUsers,      $htmlwhite,
+			$strActiveUsers,      ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActiveUsers,      $htmlwhite
 		)
 
 		$rowdata[ 1 ] = @(
 			'With password expired',   $htmlsb,
-			$strActivePasswordExpired, $htmlwhite,
+			$strActivePasswordExpired, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActivePasswordExpired, $htmlwhite
 		)
 
 		$rowdata[ 2 ] = @(
 			'With password never expires',  $htmlsb,
-			$strActivePasswordNeverExpires, $htmlwhite,
+			$strActivePasswordNeverExpires, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActivePasswordNeverExpires, $htmlwhite
 		)
 
 		$rowdata[ 3 ] = @(
 			'With password not required',  $htmlsb,
-			$strActivePasswordNotRequired, $htmlwhite,
+			$strActivePasswordNotRequired, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActivePasswordNotRequired, $htmlwhite
 		)
 
 		$rowdata[ 4 ] = @(
 			'Who cannot change password',   $htmlsb,
-			$strActiveCannotChangePassword, $htmlwhite,
+			$strActiveCannotChangePassword, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActiveCannotChangePassword, $htmlwhite
 		)
 
 		$rowdata[ 5 ] = @(
 			'Who have never logged on',     $htmlsb,
-			$strActiveNolastLogonTimestamp, $htmlwhite,
+			$strActiveNolastLogonTimestamp, ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			$pctActiveNolastLogonTimestamp, $htmlwhite
 		)
 
-		$columnWidths = @( '300px', '75px', '125px' )
+		$columnWidths = @( '300px', '75px', '150px' )
 		$columnHeaders = @(
 			'Total Users', $htmlsb,
-			$strUsers,     $htmlwhite,
+			$strUsers,     ( $htmlwhite -bor $global:htmlAlignRight ), #3.06 add alignright
 			'',            $htmlwhite
 		)
 
@@ -17197,7 +17567,7 @@ Function ProcessEventLogInfo
 			$rowdata[ $rowIndx ] = @(
 				$Item.EventLogName, $htmlwhite,
 				$Item.DCName,       $htmlwhite,
-				$Item.EventLogSize, $htmlwhite
+				$Item.EventLogSize, ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowIndx++
 		}
@@ -17230,7 +17600,7 @@ Function ProcessEventLogInfo
 	}
 	If($HTML)
 	{
-		$columnWidths  = @( '300px', '150px', '100px' )
+		$columnWidths  = @( '300px', '150px', '90px' )
 		$columnHeaders = @(
 			'Event Log Name',      $htmlsb,
 			'DC Name',             $htmlsb,
@@ -17244,6 +17614,140 @@ Function ProcessEventLogInfo
 	}
 
 	Write-Verbose "$(Get-Date -Format G): Finished Create Domain Controller Event Log Data"
+	Write-Verbose "$(Get-Date -Format G): "
+}
+#endregion
+
+#region SYSVOLStateInfo
+Function ProcessSYSVOLStateInfo
+{
+	#new function added in 3.06
+	#Domain Controller SYSVOL State Data
+	If($MSWord -or $PDF)
+	{
+		$Script:selection.InsertNewPage()
+		WriteWordLine 1 0 "Domain Controller SYSVOL State Data"
+	}
+	If($Text)
+	{
+		Line 0 "///  Domain Controller SYSVOL State Data  \\\"
+		Line 0 ""
+	}
+	If($HTML)
+	{
+		WriteHTMLLine 1 0 "///&nbsp;&nbsp;Domain Controller SYSVOL State Data&nbsp;&nbsp;\\\"
+	}
+	
+	Write-Verbose "$(Get-Date -Format G): Create Domain Controller SYSVOL State Data"
+	Write-Verbose "$(Get-Date -Format G): `tAdd Domain Controller SYSVOL State Data table to doc"
+	
+	#sort by DC
+	$xSYSVOLStateInfo = @($Script:DCSYSVOLState | Sort-Object DCName)
+	
+	If($MSWord -or $PDF)
+	{
+		$SSWordTable = New-Object System.Collections.ArrayList
+		$WordHighlightedCells = New-Object System.Collections.ArrayList
+		[int] $CurrentServiceIndex = 1
+	}
+	If($HTML)
+	{
+		$rowData = New-Object System.Array[] $xSYSVOLStateInfo.Count
+		$rowIndx = 0
+	}
+
+	ForEach($Item in $xSYSVOLStateInfo)
+	{
+		If($MSWord -or $PDF)
+		{
+			$CurrentServiceIndex++
+			
+			$WordTableRowHash = @{ 
+			DCName      = $Item.DCName; 
+			SYSVOLState = $Item.SYSVOLState
+			}
+
+			## Add the hash to the array
+			$SSWordTable.Add($WordTableRowHash) > $Null
+
+			If($Item.SYSVOLState -NotLike "4 = Normal")
+			{
+				$WordHighlightedCells.Add(@{ Row = $CurrentServiceIndex; Column = 2; }) > $Null
+			}
+		}
+		If($Text)
+		{
+			Line 1 "DC Name`t`t: " $Item.DCName
+			If($Item.SYSVOLState -NotLike "4 = Normal")
+			{
+				Line 1 "SYSVOL State`t: " "***$($Item.SYSVOLState)***"
+			}
+			Else
+			{
+				Line 1 "SYSVOL State`t: " $Item.SYSVOLState
+			}
+			Line 0 ""
+		}
+		If($HTML)
+		{
+			If($Item.SYSVOLState -NotLike "4 = Normal")
+			{
+				$HTMLHighlightedCells = $htmlred
+			}
+			Else
+			{
+				$HTMLHighlightedCells = $htmlwhite
+			} 
+			
+			$rowdata[ $rowIndx ] = @(
+				$Item.DCName,      $htmlwhite,
+				$Item.SYSVOLState, $HTMLHighlightedCells
+			)
+			$rowIndx++
+		}
+	}
+
+	If($MSWord -or $PDF)
+	{
+		$Table = AddWordTable -Hashtable $SSWordTable `
+		-Columns DCName, SYSVOLState `
+		-Headers "DC Name", "SYSVOL State" `
+		-Format $wdTableGrid `
+		-AutoFit $wdAutoFitFixed;
+
+		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+		If($WordHighlightedCells.Count -gt 0)
+		{
+			SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+		}
+
+		## IB - set column widths without recursion
+		$Table.Columns.Item(1).Width = 200;
+		$Table.Columns.Item(2).Width = 200;
+
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+
+		FindWordDocumentEnd
+		$Table = $Null
+		WriteWordLine 0 0 ""
+	}
+	If($Text)
+	{
+		#nothing to do
+	}
+	If($HTML)
+	{
+		$columnWidths  = @( '200px', '200px' )
+		$columnHeaders = @(
+			'DC Name',      $htmlsb,
+			'SYSVOL State', $htmlsb
+		)
+		
+		FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders -fixedWidth $columnWidths -tablewidth '400'
+		WriteHTMLLine 0 0 ''
+	}
+
+	Write-Verbose "$(Get-Date -Format G): Finished Create Domain Controller SYSVOL State Data"
 	Write-Verbose "$(Get-Date -Format G): "
 }
 #endregion
@@ -17385,10 +17889,7 @@ Function ProcessScriptEnd
 		$SIFile = "$Script:pwdpath\ADInventoryScriptInfo_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
 		Out-File -FilePath $SIFile -InputObject "" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "Add DateTime   : $AddDateTime" 4>$Null
-		If($MSWORD -or $PDF)
-		{
-			Out-File -FilePath $SIFile -Append -InputObject "Company Name   : $Script:CoName" 4>$Null		
-		}
+		Out-File -FilePath $SIFile -Append -InputObject "Company Name   : $Script:CoName" 4>$Null	#3.06 always output
 		Out-File -FilePath $SIFile -Append -InputObject "ComputerName   : $ComputerName" 4>$Null
 		If($MSWORD -or $PDF)
 		{
@@ -17563,6 +18064,9 @@ If($Section -eq "All" -or $Section -eq "GPOs")
 	{
 		ProcessgGPOsByOUOld
 	}
+	
+	ProcessOUsForBlockedInheritance
+	
 	ProcessGCCollect 'GPOs'
 }
 
@@ -17581,6 +18085,7 @@ If(($Section -eq "All" -or $Section -eq "Domains"))
 	}
 	ProcessTimeServerInfo
 	ProcessEventLogInfo
+	ProcessSYSVOLStateInfo
 	ProcessGCCollect 'Domains-2'
 }
 #endregion
