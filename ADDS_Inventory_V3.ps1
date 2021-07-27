@@ -791,7 +791,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.06
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 20, 2021
+	LASTEDIT: July 27, 2021
 #>
 
 
@@ -933,16 +933,23 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
-#Version 3.06
+#Version 3.06 27-Jul-2021
+#	Add new Function ProcessOUsForBlockedInheritance to add a report section for OUs with GPO Block Inheritance set
+#	Add new Function ProcessSYSVOLStateInfo to show the SYSVOL state for each DC as an Appendix
 #	Added by MBS, HTML codes for AlignLeft and AlignRight
 #		Update Function AddHTMLTable
 #		Update Function FormatHTMLTable
+#		Update Function Get-ComputerCountByOS
 #		Update Function getDSUsers
 #		Update Function OutputEventLogInfo
 #		Update Function ProcessEventLogInfo
 #		Update Function ProcessGroupInformation
 #		Update Function ProcessOrganizationalUnits
+#		Update Function ProcessSYSVOLStateInfo
 #		Update Function WriteHTMLLine
+#	In Function ProcessAllDCsInTheForest, change the way all domain controllers in the forest are retrieved
+#		The previous method did not always find RODC appliances
+#		Use new method given by MBS
 #	The following fixes were requested by Jorge de Almeida Pinto
 #		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
 #		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
@@ -1366,11 +1373,12 @@ If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 	Exit
 }
 
-$Script:DCDNSIPInfo = New-Object System.Collections.ArrayList
+$Script:DCDNSIPInfo    = New-Object System.Collections.ArrayList
 $Script:DCEventLogInfo = New-Object System.Collections.ArrayList
 $Script:TimeServerInfo = New-Object System.Collections.ArrayList
-$Script:DARights = $False
-$Script:Elevated = $False
+$Script:DCSYSVOLState  = New-Object System.Collections.ArrayList
+$Script:DARights       = $False
+$Script:Elevated       = $False
 
 #region initialize variables for word html and text
 [string]$Script:RunningOS = (Get-WmiObject -class Win32_OperatingSystem -EA 0).Caption
@@ -6685,38 +6693,38 @@ Function Get-ComputerCountByOS
 
 			$rowdata[ 0 ] = @(
 				'Total Stale Computer Objects (count)', $htmlsb,
-				$TotalStaleObjects.ToString(), $htmlwhite
+				$TotalStaleObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 1 ] = @(
 				'Total Stale Computer Objects (percent)',$htmlsb,
-				$percent, $htmlwhite
+				$percent, ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 2 ] = @(
 				'Total Enabled Computer Objects', $htmlsb,
-				$TotalEnabledObjects.ToString(), $htmlwhite
+				$TotalEnabledObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 3 ] = @(
 				'Total Enabled Stale Computer Objects', $htmlsb,
-				$TotalEnabledStaleObjects.ToString(), $htmlwhite
+				$TotalEnabledStaleObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 4 ] = @(
 				'Total Active Computer Objects', $htmlsb,
-				$( $TotalEnabledObjects - $TotalEnabledStaleObjects ), $htmlwhite
+				$( $TotalEnabledObjects - $TotalEnabledStaleObjects ), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 5 ] = @(
 				'Total Disabled Computer Objects', $htmlsb,
-				$TotalDisabledObjects.ToString(), $htmlwhite
+				$TotalDisabledObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 			$rowdata[ 6 ] = @(
 				'Total Disabled Stale Computer Objects', $htmlsb,
-				$TotalDisabledStaleObjects.ToString(), $htmlwhite
+				$TotalDisabledStaleObjects.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 
 			$msg           = "A breakdown of the $ComputerCount Computer Objects in the $domain Domain"
 			$columnWidths  = @( '400px', '50px' )
 			$columnHeaders = @(
 				'Total Computer Objects',  $htmlsb,
-				$ComputerCount.ToString(), $htmlwhite
+				$ComputerCount.ToString(), ( $htmlwhite -bor $global:htmlAlignRight ) #3.06 add alignright
 			)
 
 			FormatHTMLTable -tableHeader $msg `
@@ -8094,6 +8102,8 @@ Function ProcessAllDCsInTheForest
 	#http://msdn.microsoft.com/en-us/library/vstudio/system.directoryservices.activedirectory.forest.getforest%28v=vs.90%29
 	#$ADContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("forest", $ADForest) 
 	#2.16 change
+	
+	<# 3.06 change
 	$ADContext = New-Object System.DirectoryServices.ActiveDirectory.DirectoryContext("forest", $Script:Forest.Name)
 	$Forest2 = [system.directoryservices.activedirectory.Forest]::GetForest($ADContext)
 	Write-Verbose "$(Get-Date -Format G): `t`tBuild list of Domain controllers in the Forest"
@@ -8102,6 +8112,48 @@ Function ProcessAllDCsInTheForest
 	$AllDCs = @( $AllDCs | Sort-Object )
 	$ADContext = $Null
 	$Forest2 = $Null
+	#>
+	
+	#new code added in 3.06 from MBS
+	$Domains = $Script:Forest.domains
+	$AllDCs = New-Object System.Collections.ArrayList
+	
+	ForEach($Domain in $Domains)
+	{
+		$sourceEntry        = New-Object System.Directoryservices.DirectoryEntry( "LDAP://$Domain" )
+		$source             = New-Object System.Directoryservices.DirectorySearcher( $sourceEntry )
+		$source.SearchScope = 'Subtree'
+		$source.PageSize    = 1000
+
+		$domainController = '805306369'
+		$serverTrust      = ( 0x0080000 ).ToString()  # SERVER_TRUST_ACCOUNT
+		$trustDelegate    = ( 0x0002000 ).ToString()  # TRUSTED_FOR_DELEGATION
+		$partialSecrets   = ( 0x4000000 ).ToString()  # PARTIAL_SECRETS_ACCOUNT (RODC)
+		$bitMask          = $serverTrust -bor $trustDelegate
+
+		$groupDC   = 516
+		$groupRODC = 521
+
+		$source.Filter  = "(&(sAMAccountType=$domainController)(|(userAccountControl:1.2.840.113556.1.4.803:=$bitMask)(userAccountControl:1.2.840.113556.1.4.803:=$partialSecrets)))"
+
+		$Results = $source.FindAll()
+
+		ForEach($Result in $Results)
+		{
+			$null = $AllDCs.Add($Result.Properties.Item('dnshostname'))
+		}
+
+		If( $Results )
+		{
+			$Results.Dispose() 
+		}
+		
+		$source.Dispose()
+		$sourceEntry.Dispose()
+	}
+
+	$AllDCs = @( $AllDCs | Sort-Object )
+	#end of new 3.06 code
 
 	If($Null -eq $AllDCs)
 	{
@@ -8130,7 +8182,17 @@ Function ProcessAllDCsInTheForest
 		}
 		If($Text)
 		{
-			[int]$MaxDCNameLength = ($AllDCs | Measure-Object -Maximum -Property Length).Maximum
+			# no longer works after 3.06 changes [int]$MaxDCNameLength = ($AllDCs | Measure-Object -Maximum -Property Length).Maximum
+			#use this loop instead
+			[int]$MaxDCNameLength = 0
+
+			ForEach($item in $AllDCs)
+			{
+				If($item.Length -gt $MaxDCNameLength)
+				{
+					$MaxDCNameLength = $item.Length
+				}
+			}
 			
 			If($MaxDCNameLength -gt 4) #4 is length of "Name"
 			{
@@ -11851,9 +11913,17 @@ Function OutputADFileLocations
 		}
 		Else
 		{
-			$SysvolState  = "Unable to determine the SYSVOL State: $($Result.State)"
+			#$SysvolState  = "Unable to determine the SYSVOL State: $($Result.State)"
+			$SysvolState  = "Unable to determine the SYSVOL State" #changed in 3.06, if $Result is null or an error happened, there is no State property
 		}
 	}
+
+	$obj = [PSCustomObject] @{
+		DCName = $DCName
+		SYSVOLState = $SysvolState
+	}
+
+	$null = $Script:DCSYSVOLState.Add( $obj )
 
 	If( $DSADatabaseFile -and $DSADatabaseFile.Length -gt 0 )
 	{
@@ -15090,6 +15160,202 @@ Function ProcessgGPOsByOUNew
 } ## end Function ProcessgGPOsByOUNew
 #endregion
 
+#region OUs by domain for Blocked Inheritance
+Function ProcessOUsForBlockedInheritance
+{
+	Write-Verbose "$(Get-Date -Format G): Writing OUs with GPO Blocked Inheritance"
+
+	If($MSWORD -or $PDF)
+	{
+		$Script:selection.InsertNewPage()
+		WriteWordLine 1 0 "OUs with GPO Blocked Inheritance"
+	}
+	If($Text)
+	{
+		Line 0 "///  OUs with GPO Blocked Inheritance  \\\"
+	}
+	If($HTML)
+	{
+		WriteHTMLLine 1 0 "///&nbsp;&nbsp;OUs with GPO Blocked Inheritance&nbsp;&nbsp;\\\"
+	}
+	$First = $True
+
+	ForEach($Domain in $Script:Domains)
+	{
+		Write-Verbose "$(Get-Date -Format G): `tProcessing OUs with GPO Blocked Inheritance for domain $($Domain)"
+
+		$DomainInfo = Get-ADDomain -Identity $Domain -EA 0 
+
+		If( !$? )
+		{
+			$txt = "Error retrieving domain data for domain $($Domain)"
+			Write-Warning $txt
+			If($MSWORD -or $PDF)
+			{
+				WriteWordLine 0 0 $txt '' $Null 0 $False $True
+			}
+			If($Text)
+			{
+				Line 0 $txt
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 0 0 $txt
+			}
+
+			Continue
+		}
+
+		If( $null -eq $DomainInfo )
+		{
+			$txt = "No Domain data was retrieved for domain $($Domain)"
+			If($MSWORD -or $PDF)
+			{
+				WriteWordLine 0 0 $txt "" $Null 0 $False $True
+			}
+			If($Text)
+			{
+				Line 0 $txt
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 0 0 $txt
+			}
+
+			Continue
+		}
+
+		If(($MSWORD -or $PDF) -and !$First)
+		{
+			#put each domain, starting with the second, on a new page
+			$Script:selection.InsertNewPage()
+		}
+
+		$txt = $Domain
+		If($Domain -eq $Script:ForestRootDomain)
+		{
+			$txt += ' (Forest Root)'
+		}
+
+		If($MSWORD -or $PDF)
+		{
+			WriteWordLine 2 0 $txt
+			WriteWordLine 3 0 "OUs with Blocked Inheritance" 
+		}
+		If($Text)
+		{
+			Line 1 "///  $($txt)  \\\"
+			Line 1 "OUs with Blocked Inheritance" 
+		}
+		If($HTML)
+		{
+			WriteHTMLLine 2 0 "///&nbsp;&nbsp;$($txt)&nbsp;&nbsp;\\\"
+			WriteHTMLLine 3 0 "OUs with Blocked Inheritance" 
+		}
+
+		Write-Verbose "$(Get-Date -Format G): `t`tGetting OUs with Blocked Inheritance"
+
+		$DomainName = $DomainInfo.Name
+		$DomainFQDN = $DomainInfo.DNSRoot
+		
+		$source             = New-Object System.DirectoryServices.DirectorySearcher( "LDAP://$DomainName" )
+		$source.SearchScope = 'Subtree'
+		$source.PageSize    = 1000
+		$source.filter      = '(&(objectclass=OrganizationalUnit)(gpoptions=1))'
+
+		$BlockedOUs = $source.findall()
+		
+		If($Null -eq $BlockedOUs)
+		{
+			If($MSWORD -or $PDF)
+			{
+				WriteWordLine 0 0 "<None>"
+			}
+			If($Text)
+			{
+				Line 2 "<None>"
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 0 0 "None"
+			}
+		}
+		Else
+		{
+			$OUArray = New-Object System.Collections.ArrayList
+			
+			ForEach($Item in $BlockedOUs)
+			{
+				$obj = [PSCustomObject] @{
+					OUName = $Item.Properties.Item('distinguishedname')
+				}
+
+				$null = $OUArray.Add( $obj )
+			}
+			
+			$OUArray = @($OUArray | Sort-Object OUName)
+			
+			If($MSWORD -or $PDF)
+			{
+				$ItemsWordTable = New-Object System.Collections.ArrayList
+				ForEach($Item in $OUArray)
+				{
+					## Add the required key/values to the hashtable
+					$WordTableRowHash = @{ 
+						OUName = $Item.OUName
+					}
+
+					## Add the hash to the array
+					$ItemsWordTable.Add($WordTableRowHash) > $Null
+				}
+
+				$Table = AddWordTable -Hashtable $ItemsWordTable `
+				-Columns OUName `
+				-Headers "OU Name" `
+				-Format $wdTableGrid `
+				-AutoFit $wdAutoFitFixed
+
+				SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+
+				$Table.Columns.Item(1).Width = 300
+
+				$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+
+				FindWordDocumentEnd
+				$Table = $Null
+			}
+			If($Text)
+			{
+				ForEach($Item in $OUArray)
+				{
+					Line 2 $Item.OUName
+				}
+				Line 0 ""
+			}
+			If($HTML)
+			{
+				$rowData = @()
+
+				ForEach($Item in $OUArray)
+				{
+					$rowdata += @(,($Item.OUName,$htmlwhite))
+				}
+
+				$columnHeaders = @( 'OU Name', $htmlsb )
+
+				FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders
+				WriteHTMLLine 0 0 ''
+
+				$rowData = $null
+			}
+
+			$OUArray = $Null
+		}
+		$First = $False
+	}
+} ## end Function ProcessGPOsByDomain
+#endregion
+
 #region misc info by domain
 ## added for v3.00
 $TsHomeDrive  = 'TerminalServicesHomeDrive'
@@ -17352,6 +17618,140 @@ Function ProcessEventLogInfo
 }
 #endregion
 
+#region SYSVOLStateInfo
+Function ProcessSYSVOLStateInfo
+{
+	#new function added in 3.06
+	#Domain Controller SYSVOL State Data
+	If($MSWord -or $PDF)
+	{
+		$Script:selection.InsertNewPage()
+		WriteWordLine 1 0 "Domain Controller SYSVOL State Data"
+	}
+	If($Text)
+	{
+		Line 0 "///  Domain Controller SYSVOL State Data  \\\"
+		Line 0 ""
+	}
+	If($HTML)
+	{
+		WriteHTMLLine 1 0 "///&nbsp;&nbsp;Domain Controller SYSVOL State Data&nbsp;&nbsp;\\\"
+	}
+	
+	Write-Verbose "$(Get-Date -Format G): Create Domain Controller SYSVOL State Data"
+	Write-Verbose "$(Get-Date -Format G): `tAdd Domain Controller SYSVOL State Data table to doc"
+	
+	#sort by DC
+	$xSYSVOLStateInfo = @($Script:DCSYSVOLState | Sort-Object DCName)
+	
+	If($MSWord -or $PDF)
+	{
+		$SSWordTable = New-Object System.Collections.ArrayList
+		$WordHighlightedCells = New-Object System.Collections.ArrayList
+		[int] $CurrentServiceIndex = 1
+	}
+	If($HTML)
+	{
+		$rowData = New-Object System.Array[] $xSYSVOLStateInfo.Count
+		$rowIndx = 0
+	}
+
+	ForEach($Item in $xSYSVOLStateInfo)
+	{
+		If($MSWord -or $PDF)
+		{
+			$CurrentServiceIndex++
+			
+			$WordTableRowHash = @{ 
+			DCName      = $Item.DCName; 
+			SYSVOLState = $Item.SYSVOLState
+			}
+
+			## Add the hash to the array
+			$SSWordTable.Add($WordTableRowHash) > $Null
+
+			If($Item.SYSVOLState -NotLike "4 = Normal")
+			{
+				$WordHighlightedCells.Add(@{ Row = $CurrentServiceIndex; Column = 2; }) > $Null
+			}
+		}
+		If($Text)
+		{
+			Line 1 "DC Name`t`t: " $Item.DCName
+			If($Item.SYSVOLState -NotLike "4 = Normal")
+			{
+				Line 1 "SYSVOL State`t: " "***$($Item.SYSVOLState)***"
+			}
+			Else
+			{
+				Line 1 "SYSVOL State`t: " $Item.SYSVOLState
+			}
+			Line 0 ""
+		}
+		If($HTML)
+		{
+			If($Item.SYSVOLState -NotLike "4 = Normal")
+			{
+				$HTMLHighlightedCells = $htmlred
+			}
+			Else
+			{
+				$HTMLHighlightedCells = $htmlwhite
+			} 
+			
+			$rowdata[ $rowIndx ] = @(
+				$Item.DCName,      $htmlwhite,
+				$Item.SYSVOLState, $HTMLHighlightedCells
+			)
+			$rowIndx++
+		}
+	}
+
+	If($MSWord -or $PDF)
+	{
+		$Table = AddWordTable -Hashtable $SSWordTable `
+		-Columns DCName, SYSVOLState `
+		-Headers "DC Name", "SYSVOL State" `
+		-Format $wdTableGrid `
+		-AutoFit $wdAutoFitFixed;
+
+		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+		If($WordHighlightedCells.Count -gt 0)
+		{
+			SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+		}
+
+		## IB - set column widths without recursion
+		$Table.Columns.Item(1).Width = 200;
+		$Table.Columns.Item(2).Width = 200;
+
+		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+
+		FindWordDocumentEnd
+		$Table = $Null
+		WriteWordLine 0 0 ""
+	}
+	If($Text)
+	{
+		#nothing to do
+	}
+	If($HTML)
+	{
+		$columnWidths  = @( '200px', '200px' )
+		$columnHeaders = @(
+			'DC Name',      $htmlsb,
+			'SYSVOL State', $htmlsb
+		)
+		
+		FormatHTMLTable -rowArray $rowdata -columnArray $columnHeaders -fixedWidth $columnWidths -tablewidth '400'
+		WriteHTMLLine 0 0 ''
+	}
+
+	Write-Verbose "$(Get-Date -Format G): Finished Create Domain Controller SYSVOL State Data"
+	Write-Verbose "$(Get-Date -Format G): "
+}
+#endregion
+
 #region general script Functions
 Function ProcessDocumentOutput
 {
@@ -17664,6 +18064,9 @@ If($Section -eq "All" -or $Section -eq "GPOs")
 	{
 		ProcessgGPOsByOUOld
 	}
+	
+	ProcessOUsForBlockedInheritance
+	
 	ProcessGCCollect 'GPOs'
 }
 
@@ -17682,6 +18085,7 @@ If(($Section -eq "All" -or $Section -eq "Domains"))
 	}
 	ProcessTimeServerInfo
 	ProcessEventLogInfo
+	ProcessSYSVOLStateInfo
 	ProcessGCCollect 'Domains-2'
 }
 #endregion

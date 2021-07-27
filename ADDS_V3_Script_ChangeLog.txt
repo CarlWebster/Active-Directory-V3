@@ -8,16 +8,23 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
-#Version 3.06
+#Version 3.06 27-Jul-2021
+#	Add new Function ProcessOUsForBlockedInheritance to add a report section for OUs with GPO Block Inheritance set
+#	Add new Function ProcessSYSVOLStateInfo to show the SYSVOL state for each DC as an Appendix
 #	Added by MBS, HTML codes for AlignLeft and AlignRight
 #		Update Function AddHTMLTable
 #		Update Function FormatHTMLTable
+#		Update Function Get-ComputerCountByOS
 #		Update Function getDSUsers
 #		Update Function OutputEventLogInfo
 #		Update Function ProcessEventLogInfo
 #		Update Function ProcessGroupInformation
 #		Update Function ProcessOrganizationalUnits
+#		Update Function ProcessSYSVOLStateInfo
 #		Update Function WriteHTMLLine
+#	In Function ProcessAllDCsInTheForest, change the way all domain controllers in the forest are retrieved
+#		The previous method did not always find RODC appliances
+#		Use new method given by MBS
 #	The following fixes were requested by Jorge de Almeida Pinto
 #		In Function Get-RegistryValue, removed the Write-Verbose message on error as it confused people
 #		In Function OutputADFileLocations, check only for null to catch appliances (Riverbed) with no registry
