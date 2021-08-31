@@ -188,6 +188,25 @@
 	
 	This parameter is disabled by default.
 	This parameter has an alias of SI.
+.PARAMETER ReportFooter
+	Outputs a footer section at the end of the report.
+
+	This parameter has an alias of RF.
+	
+	Report Footer
+		Report information:
+			Created with: <Script Name> - Release Date: <Script Release Date>
+			Started on <Date Time in Local Format>
+			Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+			Ran from domain <Domain Name> by user <Username>
+			Ran from the folder <Folder Name>
+
+	Script Name and Script Release date are script-specific variables.
+	Start Date Time in Local Format is a script variable.
+	Elapsed time is a calulated value.
+	Domain Name is $env:USERDNSDOMAIN.
+	Username is $env:USERNAME.
+	Folder Name is a script variable.
 .PARAMETER DCDNSInfo 
 	Use WMI to gather, for each domain controller, the IP Address, and each DNS server 
 	configured.
@@ -230,7 +249,8 @@
 		All users with Homedrive set in ADUC
 		All users whose Primary Group is not Domain Users
 		All users with RDS HomeDrive set in ADUC
-		All Names in the ForeignSecurityPrincipals container that are orphan SIDs (Root domain only)
+		All Names in the ForeignSecurityPrincipals container that are orphan SIDs 
+		(Root domain only)
 	
 	The Text output option is limited to the first 25 characters of the SamAccountName
 	and the first 116 characters of the DistinguishedName.
@@ -789,9 +809,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.06
+	VERSION: 3.07
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 27, 2021
+	LASTEDIT: August 31, 2021
 #>
 
 
@@ -840,6 +860,10 @@ Param(
 	[parameter(Mandatory=$False)] 
 	[Alias("SI")]
 	[Switch]$ScriptInfo=$False,
+
+	[parameter(Mandatory=$False)] 
+	[Alias("RF")]
+	[Switch]$ReportFooter=$False,
 
 	[parameter(Mandatory=$False)] 
 	[Switch]$DCDNSInfo=$False, 
@@ -933,6 +957,21 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
+#Version 3.07 31-Aug-2021
+#	Add array error checking for non-empty arrays before attempting to create the Word table for most Word tables
+#	Add Function OutputReportFooter
+#	Add Parameter ReportFooter
+#		Outputs a footer section at the end of the report.
+#		Report Footer
+#			Report information:
+#				Created with: <Script Name> - Release Date: <Script Release Date>
+#				Started on <Date Time in Local Format>
+#				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+#				Ran from domain <Domain Name> by user <Username>
+#				Ran from the folder <Folder Name>
+#	Update Function OutputADFileLocations to better report on the SYSVOL state. Code supplied by Michael B. Smith.
+#	Update Function ProcessgGPOsByOUOld to allow Word table output to handle GPOs that somehow PowerShell thinks are arrays
+#	
 #Version 3.06 27-Jul-2021
 #	Add new Function ProcessOUsForBlockedInheritance to add a report section for OUs with GPO Block Inheritance set
 #	Add new Function ProcessSYSVOLStateInfo to show the SYSVOL state for each DC as an Appendix
@@ -1168,14 +1207,19 @@ Param(
 Set-StrictMode -Version Latest
 
 #force on
-$PSDefaultParameterValues = @{"*:Verbose"=$True}
-$SaveEAPreference = $ErrorActionPreference
-#$ErrorActionPreference = 'SilentlyContinue'
-$global:emailCredentials = $Null
+$PSDefaultParameterValues   = @{"*:Verbose"=$True}
+$SaveEAPreference           = $ErrorActionPreference
+$ErrorActionPreference      = 'SilentlyContinue'
+$global:emailCredentials    = $Null
 
 ## v3.00
 $script:ExtraSpecialVerbose = $false
-$script:MyVersion           = '3.06'
+
+# 3.07
+$script:MyVersion           = '3.07'
+$Script:ScriptName          = "ADDS_Inventory_V3.ps1"
+$tmpdate                    = [datetime] "08/31/2021"
+$Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
 {
@@ -3001,23 +3045,26 @@ Function GetComputerServices
 
 		If($MSWord -or $PDF)
 		{
-			$Table = AddWordTable -Hashtable $ServicesWordTable `
-			-Columns DisplayName, Status, StartMode `
-			-Headers "Display Name", "Status", "Startup Type" `
-			-Format $wdTableGrid `
-			-AutoFit $wdAutoFitContent;
-
-			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
-			If($WordHighlightedCells.Count -gt 0)
+			If($ServicesWordTable.Count -gt 0)	#3.07
 			{
-				SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+				$Table = AddWordTable -Hashtable $ServicesWordTable `
+				-Columns DisplayName, Status, StartMode `
+				-Headers "Display Name", "Status", "Startup Type" `
+				-Format $wdTableGrid `
+				-AutoFit $wdAutoFitContent;
+
+				SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+				If($WordHighlightedCells.Count -gt 0)
+				{
+					SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+				}
+
+				$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+
+				FindWordDocumentEnd
+				$Table = $Null
+				WriteWordLine 0 0 ""
 			}
-
-			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
-
-			FindWordDocumentEnd
-			$Table = $Null
-			WriteWordLine 0 0 ""
 		}
 		If($Text)
 		{
@@ -4243,7 +4290,7 @@ Function Get-RegistryValue
 	}
 	catch
 	{
-		$e = $error[ 0 ]
+		#$e = $error[ 0 ]
 		#3.06, remove the verbose message as it confised some people
 		#wv "Could not open registry on computer $ComputerName ($e)"
 	}
@@ -8131,8 +8178,8 @@ Function ProcessAllDCsInTheForest
 		$partialSecrets   = ( 0x4000000 ).ToString()  # PARTIAL_SECRETS_ACCOUNT (RODC)
 		$bitMask          = $serverTrust -bor $trustDelegate
 
-		$groupDC   = 516
-		$groupRODC = 521
+		#$groupDC   = 516
+		#$groupRODC = 521
 
 		$source.Filter  = "(&(sAMAccountType=$domainController)(|(userAccountControl:1.2.840.113556.1.4.803:=$bitMask)(userAccountControl:1.2.840.113556.1.4.803:=$partialSecrets)))"
 
@@ -8250,26 +8297,29 @@ Function ProcessAllDCsInTheForest
 
 	If($MSWord -or $PDF)
 	{
-		$Table = AddWordTable -Hashtable $WordTableRowHash `
-		-Columns DCName, GC, ReadOnly, ServerOS, ServerCore `
-		-Headers "Name", "Global Catalog", "Read-only", "Server OS", "Server Core" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed
+		If($WordTableRowHash.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $WordTableRowHash `
+			-Columns DCName, GC, ReadOnly, ServerOS, ServerCore `
+			-Headers "Name", "Global Catalog", "Read-only", "Server OS", "Server Core" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed
 
-		SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15
+			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15
 
-		$Table.Columns.Item(1).Width = 150
-		$Table.Columns.Item(2).Width = 50
-		$Table.Columns.Item(3).Width = 50
-		$Table.Columns.Item(4).Width = 130
-		$Table.Columns.Item(5).Width = 45
+			$Table.Columns.Item(1).Width = 150
+			$Table.Columns.Item(2).Width = 50
+			$Table.Columns.Item(3).Width = 50
+			$Table.Columns.Item(4).Width = 130
+			$Table.Columns.Item(5).Width = 45
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
+		}
 	}
 	If($Text)
 	{
@@ -8915,24 +8965,27 @@ Function ProcessADSchemaItems
 	If($MSWORD -or $PDF)
 	{
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $ItemsWordTable `
-		-Columns ItemName, ItemState, ItemDesc `
-		-Headers "Schema item name", "Present", "Used for" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($ItemsWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $ItemsWordTable `
+			-Columns ItemName, ItemState, ItemDesc `
+			-Headers "Schema item name", "Present", "Used for" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-		## IB - Set the header row format after the SetWordTableAlternateRowColor Function as it will paint the header row!
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+			## IB - Set the header row format after the SetWordTableAlternateRowColor Function as it will paint the header row!
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 150
-		$Table.Columns.Item(2).Width = 75
-		$Table.Columns.Item(3).Width = 200
+			$Table.Columns.Item(1).Width = 150
+			$Table.Columns.Item(2).Width = 75
+			$Table.Columns.Item(3).Width = 200
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-		FindWordDocumentEnd
-		$Table = $Null
+			FindWordDocumentEnd
+			$Table = $Null
+		}
 	}
 	If($Text)
 	{
@@ -9487,24 +9540,28 @@ Function ProcessSiteInformation
 									FromSite = $Result.FromServerSite
 									}
 								}
-								$Table = AddWordTable -Hashtable $WordTableRowHash `
-								-Columns ConnectionName, FromServer, FromSite `
-								-Headers "Name", "From Server", "From Site" `
-								-Format $wdTableGrid `
-								-AutoFit $wdAutoFitFixed;
+								
+								If($WordTableRowHash.Count -gt 0)	#3.07
+								{
+									$Table = AddWordTable -Hashtable $WordTableRowHash `
+									-Columns ConnectionName, FromServer, FromSite `
+									-Headers "Name", "From Server", "From Site" `
+									-Format $wdTableGrid `
+									-AutoFit $wdAutoFitFixed;
 
-								SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+									SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-								$Table.Columns.Item(1).Width = 200;
-								$Table.Columns.Item(2).Width = 100;
-								$Table.Columns.Item(3).Width = 100;
+									$Table.Columns.Item(1).Width = 200;
+									$Table.Columns.Item(2).Width = 100;
+									$Table.Columns.Item(3).Width = 100;
 
-								#indent the entire table 1 tab stop
-								$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+									#indent the entire table 1 tab stop
+									$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-								FindWordDocumentEnd
-								$Table = $Null
-								WriteWordLine 0 0 ""
+									FindWordDocumentEnd
+									$Table = $Null
+									WriteWordLine 0 0 ""
+								}
 							}
 						}
 						Else
@@ -10587,21 +10644,25 @@ Function ProcessDomains
 						}
 						$WordTable += $WordTableRowHash;
 					}
+					
 					#set column widths
-					$Table = AddWordTable -Hashtable $WordTable `
-					-Columns  DCName `
-					-Headers "Name" `
-					-Format $wdTableGrid `
-					-AutoFit $wdAutoFitFixed;
+					If($WordTable.Count -gt 0)	#3.07
+					{
+						$Table = AddWordTable -Hashtable $WordTable `
+						-Columns  DCName `
+						-Headers "Name" `
+						-Format $wdTableGrid `
+						-AutoFit $wdAutoFitFixed;
 
-					SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+						SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-					$Table.Columns.Item(1).Width = 105;
-					$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+						$Table.Columns.Item(1).Width = 105;
+						$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-					FindWordDocumentEnd
-					$Table = $Null
-					WriteWordLine 0 0 ""
+						FindWordDocumentEnd
+						$Table = $Null
+						WriteWordLine 0 0 ""
+					}
 				}
 				If($Text)
 				{
@@ -11887,6 +11948,8 @@ Function OutputADFileLocations
 
 		$Result = Get-WMIObject -ComputerName $DCName -Namespace "root/microsoftdfs" -Class "dfsrreplicatedfolderinfo" -Filter "ReplicatedFolderName = 'SYSVOL Share'" -EA 0 | Select-Object State
 
+		#original code before 3.07 change
+		<#
 		If($? -and $Null -ne $Result)
 		{
 			$SysvolState  = $Result.State
@@ -11914,6 +11977,73 @@ Function OutputADFileLocations
 		Else
 		{
 			#$SysvolState  = "Unable to determine the SYSVOL State: $($Result.State)"
+			$SysvolState  = "Unable to determine the SYSVOL State" #changed in 3.06, if $Result is null or an error happened, there is no State property
+		}
+		#>
+		#end of original code before change
+		
+		If($?)
+		{
+			If($Null -ne $Result)
+			{
+				$SysvolState  = $Result.State
+
+				#https://docs.microsoft.com/en-us/troubleshoot/windows-server/networking/troubleshoot-missing-sysvol-and-netlogon-shares
+				#The state values can be any of:
+				#0 = Uninitialized
+				#1 = Initialized
+				#2 = Initial Sync
+				#3 = Auto Recovery
+				#4 = Normal
+				#5 = In Error
+
+				Switch($Result.State)
+				{
+					0		{$SysvolState  = "0 = Uninitialized"; Break}
+					1		{$SysvolState  = "1 = Initialized"; Break}
+					2		{$SysvolState  = "2 = Initial Sync"; Break}
+					3		{$SysvolState  = "3 = Auto Recovery"; Break}
+					4		{$SysvolState  = "4 = Normal"; Break}
+					5		{$SysvolState  = "5 = In Error"; Break}
+					Default {$SysvolState  = "Unable to determine the SYSVOL State: $($Result.State)"; Break}
+				}
+			}
+			Else
+			{
+				#Code supplied by Michael B. Smith
+				If( Get-Command Get-SmbShare )
+				{
+					$Result = Get-SmbShare SYSVOL
+					If( $? -and $null -ne $Result )
+					{	
+						$SysVolState = $Result.ShareState
+					}
+					Else
+					{
+						$SysvolState  = "Unable to determine the SYSVOL State (SMB)"
+					}
+				}
+				Else
+				{
+					$Result = net.exe SHARE SYSVOL
+					If( 0 -eq $LASTEXITCODE )
+					{
+						$SysVolState = 'Online'
+					}
+					ElseIf ( 2 -eq $LASTEXITCODE )
+					{
+						$SysVolState = 'No such share'
+					}
+					Else
+					{
+						$SysVolState ="Unable to determine the SYSVOL State (net.exe) $LASTEXITCODE"
+					}
+				}
+				#end of MBS code
+			}
+		}
+		Else
+		{
 			$SysvolState  = "Unable to determine the SYSVOL State" #changed in 3.06, if $Result is null or an error happened, there is no State property
 		}
 	}
@@ -12459,41 +12589,44 @@ Function ProcessOrganizationalUnits
 		If($MSWord -or $PDF)
 		{
 			## Add the table to the document, using the hashtable
-			$Table = AddWordTable -Hashtable $ItemsWordTable `
-			-Columns OUName, OUCreated, OUProtected, OUNumUsers, OUNumComputers, OUNumGroups `
-			-Headers "Name", "Created", "Protected", "# Users", "# Computers", "# Groups" `
-			-Format $wdTableGrid `
-			-AutoFit $wdAutoFitFixed;
-
-			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
-			If($WordHighlightedCells.Count -gt 0)
+			If($ItemsWordTable.Count -gt 0)	#3.07
 			{
-				SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
-			}
+				$Table = AddWordTable -Hashtable $ItemsWordTable `
+				-Columns OUName, OUCreated, OUProtected, OUNumUsers, OUNumComputers, OUNumGroups `
+				-Headers "Name", "Created", "Protected", "# Users", "# Computers", "# Groups" `
+				-Format $wdTableGrid `
+				-AutoFit $wdAutoFitFixed;
 
-			$Table.Columns.Item(1).Width = 125
-			$Table.Columns.Item(2).Width = 100
-			$Table.Columns.Item(3).Width = 55
-			$Table.Columns.Item(4).Width = 55
-			$Table.Columns.Item(5).Width = 70
-			$Table.Columns.Item(6).Width = 55
+				SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+				SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+				If($WordHighlightedCells.Count -gt 0)
+				{
+					SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+				}
 
-			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+				$Table.Columns.Item(1).Width = 125
+				$Table.Columns.Item(2).Width = 100
+				$Table.Columns.Item(3).Width = 55
+				$Table.Columns.Item(4).Width = 55
+				$Table.Columns.Item(5).Width = 70
+				$Table.Columns.Item(6).Width = 55
 
-			FindWordDocumentEnd
-			$Table = $Null
-			WriteWordLine 0 0 ""
-			$Table = $Null
-			$Results = $Null
-			$UserCountStr = $Null
-			$ComputerCountStr = $Null
-			$GroupCountStr = $Null
+				$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-			#added in V2.22
-			If($UnprotectedOUs -gt 0)
-			{
-				WriteWordLine 0 0 "There are $($UnprotectedOUs) unprotected OUs out of $($NumOUs) OUs"
+				FindWordDocumentEnd
+				$Table = $Null
+				WriteWordLine 0 0 ""
+				$Table = $Null
+				$Results = $Null
+				$UserCountStr = $Null
+				$ComputerCountStr = $Null
+				$GroupCountStr = $Null
+
+				#added in V2.22
+				If($UnprotectedOUs -gt 0)
+				{
+					WriteWordLine 0 0 "There are $($UnprotectedOUs) unprotected OUs out of $($NumOUs) OUs"
+				}
 			}
 		}
 		If($Text)
@@ -13944,7 +14077,7 @@ Function ProcessGroupInformation
 								$PasswordLastSet = (Get-Date $User.PasswordLastSet -f d)
 							}
 							#V3.00
-							$UserEnabled = $User.Enabled.ToString()
+							#$UserEnabled = $User.Enabled.ToString()
 							Line 2 ( "{0,-50}  {1,-20}  {2,-25}  {3,-10}  {4,-10}  {5,-5}" -f $User.Name,$User.SamAccountName,$xServer,$PasswordLastSet,$User.PasswordNeverExpires.ToString(),$User.Enabled.ToString())
 						}
 						If($HTML)
@@ -14530,20 +14663,23 @@ Function ProcessGPOsByDomain
 					$ItemsWordTable.Add($WordTableRowHash) > $Null
 				}
 
-				$Table = AddWordTable -Hashtable $ItemsWordTable `
-				-Columns GPOName `
-				-Headers "GPO Name" `
-				-Format $wdTableGrid `
-				-AutoFit $wdAutoFitFixed
+				If($ItemsWordTable.Count -gt 0)	#3.07
+				{
+					$Table = AddWordTable -Hashtable $ItemsWordTable `
+					-Columns GPOName `
+					-Headers "GPO Name" `
+					-Format $wdTableGrid `
+					-AutoFit $wdAutoFitFixed
 
-				SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+					SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-				$Table.Columns.Item(1).Width = 300
+					$Table.Columns.Item(1).Width = 300
 
-				$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+					$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-				FindWordDocumentEnd
-				$Table = $Null
+					FindWordDocumentEnd
+					$Table = $Null
+				}
 			}
 			If($Text)
 			{
@@ -14802,7 +14938,30 @@ Function ProcessgGPOsByOUOld
 					ForEach($Item in $GPOArray)
 					{
 						$xRow++
-						$Table.Cell($xRow,1).Range.Text = $Item
+						#3.07 somehow PoSH thinks some GPOs are arrays. 
+						#The GPOs in my lab that start with "+" PoSH says are arrays and I started getting this error
+						#Unable to cast object of type 'System.Object[]' to type 'System.String'.
+						#At C:\Webster\ADDS_Inventory_V3.ps1:14923 char:7
+						#+                         $Table.Cell($xRow,1).Range.Text = $Item
+						#+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+						#+ CategoryInfo          : OperationStopped: (:) [], InvalidCastException
+						#+ FullyQualifiedErrorId : System.InvalidCastException       
+						#
+						#Group Policies by OUs in Domain LabADDomain.com (Forest Root)
+						#(Contains only OUs with linked Group Policies)
+						#Domain Controllers (3)
+						#+ SERVER Set PDCe Domain Controller as Authoritative Time Server v1.0 [somehow seen as an array, not a string]
+						#+ SERVER Set Time Settings on non-PDCe Domain Controllers v1.0 [somehow seen as an array, not a string]
+						#Default Domain Controllers Policy
+
+                        If($Item -is [array]) 
+                        {
+						    $Table.Cell($xRow,1).Range.Text = $Item[0]
+                        }
+                        Else
+                        {
+						    $Table.Cell($xRow,1).Range.Text = $Item
+                        }
 					}
 
 					$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
@@ -15094,23 +15253,26 @@ Function ProcessgGPOsByOUNew
 						$GPOWordTable.Add($WordTableRowHash) > $Null
 					}
 
-					$Table = AddWordTable -Hashtable $GPOWordTable `
-					-Columns GPOName, GPOType `
-					-Headers "GPO Name", "GPO Type" `
-					-Format $wdTableGrid `
-					-AutoFit $wdAutoFitFixed;
+					If($GPOWordTable.Count -gt 0)	#3.07
+					{
+						$Table = AddWordTable -Hashtable $GPOWordTable `
+						-Columns GPOName, GPOType `
+						-Headers "GPO Name", "GPO Type" `
+						-Format $wdTableGrid `
+						-AutoFit $wdAutoFitFixed;
 
-					SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+						SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-					## IB - set column widths without recursion
-					$Table.Columns.Item(1).Width = 400;
-					$Table.Columns.Item(2).Width = 65;
+						## IB - set column widths without recursion
+						$Table.Columns.Item(1).Width = 400;
+						$Table.Columns.Item(2).Width = 65;
 
-					$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+						$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-					FindWordDocumentEnd
-					$Table = $Null
-					WriteWordLine 0 0 ""
+						FindWordDocumentEnd
+						$Table = $Null
+						WriteWordLine 0 0 ""
+					}
 				}
 				If($Text)
 				{
@@ -15256,7 +15418,7 @@ Function ProcessOUsForBlockedInheritance
 		Write-Verbose "$(Get-Date -Format G): `t`tGetting OUs with Blocked Inheritance"
 
 		$DomainName = $DomainInfo.Name
-		$DomainFQDN = $DomainInfo.DNSRoot
+		#$DomainFQDN = $DomainInfo.DNSRoot
 		
 		$source             = New-Object System.DirectoryServices.DirectorySearcher( "LDAP://$DomainName" )
 		$source.SearchScope = 'Subtree'
@@ -15309,20 +15471,23 @@ Function ProcessOUsForBlockedInheritance
 					$ItemsWordTable.Add($WordTableRowHash) > $Null
 				}
 
-				$Table = AddWordTable -Hashtable $ItemsWordTable `
-				-Columns OUName `
-				-Headers "OU Name" `
-				-Format $wdTableGrid `
-				-AutoFit $wdAutoFitFixed
+				If($ItemsWordTable.Count -gt 0)	#3.07
+				{
+					$Table = AddWordTable -Hashtable $ItemsWordTable `
+					-Columns OUName `
+					-Headers "OU Name" `
+					-Format $wdTableGrid `
+					-AutoFit $wdAutoFitFixed
 
-				SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+					SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-				$Table.Columns.Item(1).Width = 300
+					$Table.Columns.Item(1).Width = 300
 
-				$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+					$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-				FindWordDocumentEnd
-				$Table = $Null
+					FindWordDocumentEnd
+					$Table = $Null
+				}
 			}
 			If($Text)
 			{
@@ -16636,22 +16801,25 @@ Function OutputUserInfo
 		}
 		
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $UsersWordTable `
-		-Columns SamAccountName, DN `
-		-Headers "SamAccountName", "DistinguishedName" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($UsersWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $UsersWordTable `
+			-Columns SamAccountName, DN `
+			-Headers "SamAccountName", "DistinguishedName" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 150;
-		$Table.Columns.Item(2).Width = 350;
+			$Table.Columns.Item(1).Width = 150;
+			$Table.Columns.Item(2).Width = 350;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
+		}
 	}
 	If($Text)
 	{
@@ -16739,27 +16907,30 @@ Function OutputHDUserInfo
 		}
 		
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $UsersWordTable `
-		-Columns SamAccountName, DN, HomeDrive, HomeDir, ProfilePath, ScriptPath `
-		-Headers "SamAccountName", "DistinguishedName", "Home drive", "Home folder", "Profile path", "Login script" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($UsersWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $UsersWordTable `
+			-Columns SamAccountName, DN, HomeDrive, HomeDir, ProfilePath, ScriptPath `
+			-Headers "SamAccountName", "DistinguishedName", "Home drive", "Home folder", "Profile path", "Login script" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 100;
-		$Table.Columns.Item(2).Width = 110;
-		$Table.Columns.Item(3).Width = 35;
-		$Table.Columns.Item(4).Width = 85;
-		$Table.Columns.Item(5).Width = 85;
-		$Table.Columns.Item(6).Width = 85;
+			$Table.Columns.Item(1).Width = 100;
+			$Table.Columns.Item(2).Width = 110;
+			$Table.Columns.Item(3).Width = 35;
+			$Table.Columns.Item(4).Width = 85;
+			$Table.Columns.Item(5).Width = 85;
+			$Table.Columns.Item(6).Width = 85;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ''
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ''
+		}
 	}
 	If($Text)
 	{
@@ -16855,24 +17026,27 @@ Function OutputPGUserInfo
 		}
 		
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $UsersWordTable `
-		-Columns SamAccountName, DN, PG `
-		-Headers "SamAccountName", "DistinguishedName", "Primary Group" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($UsersWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $UsersWordTable `
+			-Columns SamAccountName, DN, PG `
+			-Headers "SamAccountName", "DistinguishedName", "Primary Group" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 100;
-		$Table.Columns.Item(2).Width = 200;
-		$Table.Columns.Item(3).Width = 200;
+			$Table.Columns.Item(1).Width = 100;
+			$Table.Columns.Item(2).Width = 200;
+			$Table.Columns.Item(3).Width = 200;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
+		}
 	}
 	If($Text)
 	{
@@ -16971,27 +17145,30 @@ Function OutputRDSHDUserInfo
 		}
 		
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $UsersWordTable `
-		-Columns SamAccountName, DN, HomeDrive, HomeDir, ProfilePath, ALlowLogon `
-		-Headers "SamAccountName", "DistinguishedName", "RDS Home drive", "RDS Home folder", "RDS Profile path", "Allow Logon" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($UsersWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $UsersWordTable `
+			-Columns SamAccountName, DN, HomeDrive, HomeDir, ProfilePath, ALlowLogon `
+			-Headers "SamAccountName", "DistinguishedName", "RDS Home drive", "RDS Home folder", "RDS Profile path", "Allow Logon" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 100;
-		$Table.Columns.Item(2).Width = 140;
-		$Table.Columns.Item(3).Width = 35;
-		$Table.Columns.Item(4).Width = 75;
-		$Table.Columns.Item(5).Width = 90;
-		$Table.Columns.Item(6).Width = 60;
+			$Table.Columns.Item(1).Width = 100;
+			$Table.Columns.Item(2).Width = 140;
+			$Table.Columns.Item(3).Width = 35;
+			$Table.Columns.Item(4).Width = 75;
+			$Table.Columns.Item(5).Width = 90;
+			$Table.Columns.Item(6).Width = 60;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
+		}
 	}
 	If($Text)
 	{
@@ -17086,23 +17263,26 @@ Function OutputFSPUserInfo
 		}
 		
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $UsersWordTable `
-		-Columns Name, Groups `
-		-Headers "Name", "Groups" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($UsersWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $UsersWordTable `
+			-Columns Name, Groups `
+			-Headers "Name", "Groups" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 9 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 250;
-		$Table.Columns.Item(2).Width = 250;
+			$Table.Columns.Item(1).Width = 250;
+			$Table.Columns.Item(2).Width = 250;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustNone)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
+		}
 	}
 	If($Text)
 	{
@@ -17215,28 +17395,31 @@ Function ProcessDCDNSInfo
 		}
 
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $ItemsWordTable `
-		-Columns DCName, DCSite, DCIpAddress1, DCIpAddress2, DCDNS1, DCDNS2, DCDNS3, DCDNS4 `
-		-Headers "DC Name", "Site", "IP Address 1", "IP Address 2", "DNS 1", "DNS 2", "DNS 3", "DNS 4" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed
+		If($ItemsWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $ItemsWordTable `
+			-Columns DCName, DCSite, DCIpAddress1, DCIpAddress2, DCDNS1, DCDNS2, DCDNS3, DCDNS4 `
+			-Headers "DC Name", "Site", "IP Address 1", "IP Address 2", "DNS 1", "DNS 2", "DNS 3", "DNS 4" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed
 
-		SetWordCellFormat -Collection $Table -Size 8 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 8 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 100;
-		$Table.Columns.Item(2).Width = 60;
-		$Table.Columns.Item(3).Width = 70;
-		$Table.Columns.Item(4).Width = 70;
-		$Table.Columns.Item(5).Width = 50;
-		$Table.Columns.Item(6).Width = 50;
-		$Table.Columns.Item(7).Width = 50;
-		$Table.Columns.Item(8).Width = 50;
+			$Table.Columns.Item(1).Width = 100;
+			$Table.Columns.Item(2).Width = 60;
+			$Table.Columns.Item(3).Width = 70;
+			$Table.Columns.Item(4).Width = 70;
+			$Table.Columns.Item(5).Width = 50;
+			$Table.Columns.Item(6).Width = 50;
+			$Table.Columns.Item(7).Width = 50;
+			$Table.Columns.Item(8).Width = 50;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-		FindWordDocumentEnd
-		$Table = $Null
+			FindWordDocumentEnd
+			$Table = $Null
+		}
 	}
 	If( $Text )
 	{
@@ -17385,29 +17568,32 @@ Function ProcessTimeServerInfo
 		}
 
 		## Add the table to the document, using the hashtable
-		$Table = AddWordTable -Hashtable $ItemsWordTable `
-		-Columns DCName, DCTimeSource, DCAnnounceFlags, DCMaxNegPhaseCorrection, DCMaxPosPhaseCorrection, DCNtpServer, DCNtpType, DCSpecialPollInterval, DCVMICTimeProvider `
-		-Headers "DC Name", "Time Source", "Announce Flags", "Max Neg Phase Correction", "Max Pos Phase Correction", "NTP Server", "Type", "Special Poll Interval", "VMIC Time Provider" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($ItemsWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $ItemsWordTable `
+			-Columns DCName, DCTimeSource, DCAnnounceFlags, DCMaxNegPhaseCorrection, DCMaxPosPhaseCorrection, DCNtpServer, DCNtpType, DCSpecialPollInterval, DCVMICTimeProvider `
+			-Headers "DC Name", "Time Source", "Announce Flags", "Max Neg Phase Correction", "Max Pos Phase Correction", "NTP Server", "Type", "Special Poll Interval", "VMIC Time Provider" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table -Size 8 -BackgroundColor $wdColorWhite
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table -Size 8 -BackgroundColor $wdColorWhite
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		$Table.Columns.Item(1).Width = 105;
-		$Table.Columns.Item(2).Width = 73;
-		$Table.Columns.Item(3).Width = 45;
-		$Table.Columns.Item(4).Width = 47;
-		$Table.Columns.Item(5).Width = 47;
-		$Table.Columns.Item(6).Width = 73;
-		$Table.Columns.Item(7).Width = 33;
-		$Table.Columns.Item(8).Width = 37;
-		$Table.Columns.Item(9).Width = 40;
+			$Table.Columns.Item(1).Width = 105;
+			$Table.Columns.Item(2).Width = 73;
+			$Table.Columns.Item(3).Width = 45;
+			$Table.Columns.Item(4).Width = 47;
+			$Table.Columns.Item(5).Width = 47;
+			$Table.Columns.Item(6).Width = 73;
+			$Table.Columns.Item(7).Width = 33;
+			$Table.Columns.Item(8).Width = 37;
+			$Table.Columns.Item(9).Width = 40;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-		FindWordDocumentEnd
-		$Table = $Null
+			FindWordDocumentEnd
+			$Table = $Null
+		}
 	}
 	If( $Text )
 	{
@@ -17575,24 +17761,27 @@ Function ProcessEventLogInfo
 
 	If($MSWord -or $PDF)
 	{
-		$Table = AddWordTable -Hashtable $ELWordTable `
-		-Columns EventLogName, DCName, EventLogSize `
-		-Headers "Event Log Name", "DC Name", "Event Log Size (KB)" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
+		If($ELWordTable.Count -gt 0)	#3.07
+		{
+			$Table = AddWordTable -Hashtable $ELWordTable `
+			-Columns EventLogName, DCName, EventLogSize `
+			-Headers "Event Log Name", "DC Name", "Event Log Size (KB)" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
 
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
 
-		## IB - set column widths without recursion
-		$Table.Columns.Item(1).Width = 150;
-		$Table.Columns.Item(2).Width = 150;
-		$Table.Columns.Item(3).Width = 100;
+			## IB - set column widths without recursion
+			$Table.Columns.Item(1).Width = 150;
+			$Table.Columns.Item(2).Width = 150;
+			$Table.Columns.Item(3).Width = 100;
 
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
 
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
+		}
 	}
 	If($Text)
 	{
@@ -17709,27 +17898,30 @@ Function ProcessSYSVOLStateInfo
 
 	If($MSWord -or $PDF)
 	{
-		$Table = AddWordTable -Hashtable $SSWordTable `
-		-Columns DCName, SYSVOLState `
-		-Headers "DC Name", "SYSVOL State" `
-		-Format $wdTableGrid `
-		-AutoFit $wdAutoFitFixed;
-
-		SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
-		If($WordHighlightedCells.Count -gt 0)
+		If($SSWordTable.Count -gt 0)	#3.07
 		{
-			SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+			$Table = AddWordTable -Hashtable $SSWordTable `
+			-Columns DCName, SYSVOLState `
+			-Headers "DC Name", "SYSVOL State" `
+			-Format $wdTableGrid `
+			-AutoFit $wdAutoFitFixed;
+
+			SetWordCellFormat -Collection $Table.Rows.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			If($WordHighlightedCells.Count -gt 0)
+			{
+				SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+			}
+
+			## IB - set column widths without recursion
+			$Table.Columns.Item(1).Width = 200;
+			$Table.Columns.Item(2).Width = 200;
+
+			$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
+
+			FindWordDocumentEnd
+			$Table = $Null
+			WriteWordLine 0 0 ""
 		}
-
-		## IB - set column widths without recursion
-		$Table.Columns.Item(1).Width = 200;
-		$Table.Columns.Item(2).Width = 200;
-
-		$Table.Rows.SetLeftIndent($Indent0TabStops,$wdAdjustProportional)
-
-		FindWordDocumentEnd
-		$Table = $Null
-		WriteWordLine 0 0 ""
 	}
 	If($Text)
 	{
@@ -17753,6 +17945,68 @@ Function ProcessSYSVOLStateInfo
 #endregion
 
 #region general script Functions
+Function OutputReportFooter
+{
+	#Added in 3.07
+	<#
+	Report information:
+		Created with: <Script Name> - Release Date: <Script Release Date>
+		Started on <Date Time in Local Format>
+		Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+		Ran from domain <Domain Name> by user <Username>
+		Ran from the folder <Folder Name>
+
+	Script Name and Script Release date are script-specific variables.
+	Start Date Time in Local Format is a script variable.
+	Domain Name is $env:USERDNSDOMAIN.
+	Username is $env:USERNAME.
+	Folder Name is a script variable.
+	#>
+	
+	$runtime = $(Get-Date) - $Script:StartTime
+	$Str = [string]::format("{0} days, {1} hours, {2} minutes, {3}.{4} seconds",
+		$runtime.Days,
+		$runtime.Hours,
+		$runtime.Minutes,
+		$runtime.Seconds,
+		$runtime.Milliseconds)
+
+
+	If($MSWORD -or $PDF)
+	{
+		$Script:selection.InsertNewPage()
+		WriteWordLine 1 0 "Report Footer"
+		WriteWordLine 2 0 "Report Information:"
+		WriteWordLine 0 1 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		WriteWordLine 0 1 "Started on $Script:StartTime"
+		WriteWordLine 0 1 "Elapsed time: $Str"
+		WriteWordLine 0 1 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"
+		WriteWordLine 0 1 "Ran from the folder $Script:pwdpath"
+	}
+	If($Text)
+	{
+		Line 0 "///  Report Footer  \\\"
+		Line 0 "Report Footer"
+		Line 1 "Report Information:"
+		Line 2 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		Line 2 "Started on $Script:StartTime"
+		Line 2 "Elapsed time: $Str"
+		Line 2 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"
+		Line 2 "Ran from the folder $Script:pwdpath"
+	}
+	If($HTML)
+	{
+		WriteHTMLLine 1 0 "///&nbsp;&nbsp;Report Footer&nbsp;&nbsp;\\\"
+		WriteHTMLLine 1 0 "Report Footer"
+		WriteHTMLLine 2 0 "Report Information:"
+		WriteHTMLLine 0 1 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		WriteHTMLLine 0 1 "Started on $Script:StartTime"
+		WriteHTMLLine 0 1 "Elapsed time: $Str"
+		WriteHTMLLine 0 1 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"
+		WriteHTMLLine 0 1 "Ran from the folder $Script:pwdpath"
+	}
+}
+
 Function ProcessDocumentOutput
 {
 	If($MSWORD -or $PDF)
@@ -18099,6 +18353,11 @@ If(($MSWORD -or $PDF) -and ($Script:CoverPagesExist))
 	$AbstractTitle = "Microsoft Active Directory Inventory Report $script:MyVersion"
 	$SubjectTitle = "Active Directory Inventory Report $script:MyVersion"
 	UpdateDocumentProperties $AbstractTitle $SubjectTitle
+}
+
+If($ReportFooter)
+{
+	OutputReportFooter
 }
 
 ProcessDocumentOutput

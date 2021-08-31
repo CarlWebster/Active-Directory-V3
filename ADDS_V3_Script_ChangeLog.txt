@@ -8,6 +8,21 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.07 31-Aug-2021
+#	Add array error checking for non-empty arrays before attempting to create the Word table for most Word tables
+#	Add Function OutputReportFooter
+#	Add Parameter ReportFooter
+#		Outputs a footer section at the end of the report.
+#		Report Footer
+#			Report information:
+#				Created with: <Script Name> - Release Date: <Script Release Date>
+#				Started on <Date Time in Local Format>
+#				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+#				Ran from domain <Domain Name> by user <Username>
+#				Ran from the folder <Folder Name>
+#	Update Function OutputADFileLocations to better report on the SYSVOL state. Code supplied by Michael B. Smith.
+#	Update Function ProcessgGPOsByOUOld to allow Word table output to handle GPOs that somehow PowerShell thinks are arrays
+
 #Version 3.06 27-Jul-2021
 #	Add new Function ProcessOUsForBlockedInheritance to add a report section for OUs with GPO Block Inheritance set
 #	Add new Function ProcessSYSVOLStateInfo to show the SYSVOL state for each DC as an Appendix
