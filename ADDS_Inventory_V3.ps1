@@ -17991,7 +17991,6 @@ Function OutputReportFooter
 	If($Text)
 	{
 		Line 0 "///  Report Footer  \\\"
-		Line 0 "Report Footer"
 		Line 1 "Report Information:"
 		Line 2 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
 		Line 2 "Script version: $Script:MyVersion"
@@ -18003,7 +18002,6 @@ Function OutputReportFooter
 	If($HTML)
 	{
 		WriteHTMLLine 1 0 "///&nbsp;&nbsp;Report Footer&nbsp;&nbsp;\\\"
-		WriteHTMLLine 1 0 "Report Footer"
 		WriteHTMLLine 2 0 "Report Information:"
 		WriteHTMLLine 0 1 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
 		WriteHTMLLine 0 1 "Script version: $Script:MyVersion"
