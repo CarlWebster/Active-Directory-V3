@@ -196,6 +196,7 @@
 	Report Footer
 		Report information:
 			Created with: <Script Name> - Release Date: <Script Release Date>
+			Script version: <Script Version>
 			Started on <Date Time in Local Format>
 			Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
 			Ran from domain <Domain Name> by user <Username>
@@ -965,6 +966,7 @@ Param(
 #		Report Footer
 #			Report information:
 #				Created with: <Script Name> - Release Date: <Script Release Date>
+#				Script version: <Script Version>
 #				Started on <Date Time in Local Format>
 #				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
 #				Ran from domain <Domain Name> by user <Username>
@@ -17949,20 +17951,23 @@ Function OutputReportFooter
 {
 	#Added in 3.07
 	<#
-	Report information:
-		Created with: <Script Name> - Release Date: <Script Release Date>
-		Started on <Date Time in Local Format>
-		Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
-		Ran from domain <Domain Name> by user <Username>
-		Ran from the folder <Folder Name>
+	Report Footer
+		Report information:
+			Created with: <Script Name> - Release Date: <Script Release Date>
+			Script version: <Script Version>
+			Started on <Date Time in Local Format>
+			Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
+			Ran from domain <Domain Name> by user <Username>
+			Ran from the folder <Folder Name>
 
 	Script Name and Script Release date are script-specific variables.
+	Script version is a script variable.
 	Start Date Time in Local Format is a script variable.
 	Domain Name is $env:USERDNSDOMAIN.
 	Username is $env:USERNAME.
 	Folder Name is a script variable.
 	#>
-	
+
 	$runtime = $(Get-Date) - $Script:StartTime
 	$Str = [string]::format("{0} days, {1} hours, {2} minutes, {3}.{4} seconds",
 		$runtime.Days,
@@ -17971,13 +17976,13 @@ Function OutputReportFooter
 		$runtime.Seconds,
 		$runtime.Milliseconds)
 
-
 	If($MSWORD -or $PDF)
 	{
 		$Script:selection.InsertNewPage()
 		WriteWordLine 1 0 "Report Footer"
 		WriteWordLine 2 0 "Report Information:"
 		WriteWordLine 0 1 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		WriteWordLine 0 1 "Script version: $Script:MyVersion"
 		WriteWordLine 0 1 "Started on $Script:StartTime"
 		WriteWordLine 0 1 "Elapsed time: $Str"
 		WriteWordLine 0 1 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"
@@ -17989,6 +17994,7 @@ Function OutputReportFooter
 		Line 0 "Report Footer"
 		Line 1 "Report Information:"
 		Line 2 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		Line 2 "Script version: $Script:MyVersion"
 		Line 2 "Started on $Script:StartTime"
 		Line 2 "Elapsed time: $Str"
 		Line 2 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"
@@ -18000,6 +18006,7 @@ Function OutputReportFooter
 		WriteHTMLLine 1 0 "Report Footer"
 		WriteHTMLLine 2 0 "Report Information:"
 		WriteHTMLLine 0 1 "Created with: $Script:ScriptName - Release Date: $Script:ReleaseDate"
+		WriteHTMLLine 0 1 "Script version: $Script:MyVersion"
 		WriteHTMLLine 0 1 "Started on $Script:StartTime"
 		WriteHTMLLine 0 1 "Elapsed time: $Str"
 		WriteHTMLLine 0 1 "Ran from domain $env:USERDNSDOMAIN by user $env:USERNAME"

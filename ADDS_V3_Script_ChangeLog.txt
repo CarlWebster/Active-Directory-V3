@@ -16,6 +16,7 @@
 #		Report Footer
 #			Report information:
 #				Created with: <Script Name> - Release Date: <Script Release Date>
+#				Script version: <Script Version>
 #				Started on <Date Time in Local Format>
 #				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
 #				Ran from domain <Domain Name> by user <Username>
