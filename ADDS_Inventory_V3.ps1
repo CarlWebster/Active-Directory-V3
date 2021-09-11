@@ -812,7 +812,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.07
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: August 31, 2021
+	LASTEDIT: September 11, 2021
 #>
 
 
@@ -958,10 +958,10 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
-#Version 3.07 31-Aug-2021
-#	Add array error checking for non-empty arrays before attempting to create the Word table for most Word tables
-#	Add Function OutputReportFooter
-#	Add Parameter ReportFooter
+#Version 3.07 11-Sep-2021
+#	Added array error checking for non-empty arrays before attempting to create the Word table for most Word tables
+#	Added Function OutputReportFooter
+#	Added Parameter ReportFooter
 #		Outputs a footer section at the end of the report.
 #		Report Footer
 #			Report information:
@@ -971,8 +971,12 @@ Param(
 #				Elapsed time: nn days, nn hours, nn minutes, nn.nn seconds
 #				Ran from domain <Domain Name> by user <Username>
 #				Ran from the folder <Folder Name>
-#	Update Function OutputADFileLocations to better report on the SYSVOL state. Code supplied by Michael B. Smith.
-#	Update Function ProcessgGPOsByOUOld to allow Word table output to handle GPOs that somehow PowerShell thinks are arrays
+#	Updated Function OutputADFileLocations to better report on the SYSVOL state. Code supplied by Michael B. Smith.
+#	Updated Function ProcessgGPOsByOUOld to allow Word table output to handle GPOs that somehow PowerShell thinks are arrays
+#	Updated Functions SaveandCloseTextDocument and SaveandCloseHTMLDocument to add a "Report Complete" line
+#	Updated Functions ShowScriptOptions and ProcessScriptEnd to add $ReportFooter
+#	Updated the help text
+#	Updated the ReadMe file
 #	
 #Version 3.06 27-Jul-2021
 #	Add new Function ProcessOUsForBlockedInheritance to add a report section for OUs with GPO Block Inheritance set
@@ -1220,7 +1224,7 @@ $script:ExtraSpecialVerbose = $false
 # 3.07
 $script:MyVersion           = '3.07'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "08/31/2021"
+$tmpdate                    = [datetime] "09/11/2021"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
