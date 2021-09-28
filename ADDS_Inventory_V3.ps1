@@ -958,6 +958,11 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
+#Version 3.08
+#	Update schema numbers for Exchange CUs
+#		"15334" = "Exchange 2016 CU21-CU22"
+#		"17003" = "Exchange 2019 CU10-CU11"
+#
 #Version 3.07 11-Sep-2021
 #	Added array error checking for non-empty arrays before attempting to create the Word table for most Word tables
 #	Added Function OutputReportFooter
@@ -9802,11 +9807,11 @@ Function ProcessDomains
 	"15330" = "Exchange 2016 CU6"; #added in 2.16
 	"15332" = "Exchange 2016 CU7 through CU18"; #added in 2.16 and updated in 2.20, updated in 2.22, updated in 2.24, updated in 3.02
 	"15333" = "Exchange 2016 CU19/CU20"; #added in 3.02, updated in 3.05
-	"15334" = "Exchange 2016 CU21"; #added in 3.05
+	"15334" = "Exchange 2016 CU21-CU22"; #added in 3.05, updated in 3.08
 	"17000" = "Exchange 2019 RTM/CU1"; #added in 2.22, updated in 2.24
 	"17001" = "Exchange 2019 CU2-CU7"; #added in 2.24, updated in 3.02
 	"17002" = "Exchange 2019 CU8/CU9"; #added in 3.02, updated in 3.05
-	"17003" = "Exchange 2019 CU10"; #added in 3.05
+	"17003" = "Exchange 2019 CU10-CU11"; #added in 3.05, updated in 3.08
 	}
 
 	ForEach($Domain in $Script:Domains)

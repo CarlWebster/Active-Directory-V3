@@ -8,6 +8,11 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.08
+#	Update schema numbers for Exchange CUs
+#		"15334" = "Exchange 2016 CU21-CU22"
+#		"17003" = "Exchange 2019 CU10-CU11"
+
 #Version 3.07 11-Sep-2021
 #	Added array error checking for non-empty arrays before attempting to create the Word table for most Word tables
 #	Added Function OutputReportFooter
