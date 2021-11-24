@@ -8,10 +8,17 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
-#Version 3.08
-#	Update schema numbers for Exchange CUs
+#Version 3.08 24-Nov-2021
+#	In Function AbortScript, add test for the winword process and terminate it if it is running
+#	In Functions AbortScript and SaveandCloseDocumentandShutdownWord, add code from Guy Leech to test for the "Id" property before using it
+#	In Function ProcessDomainControllers, added "Computer Object DN" to the output
+#		If the DN doesn't contain "OU=Domain Controllers", highlight the Word/HTML output in red and add "***" to the text output
+#	Updated Functions ShowScriptOptions and ProcessScriptEnd to add $ReportFooter
+#	Updated schema numbers for Exchange CUs
 #		"15334" = "Exchange 2016 CU21-CU22"
 #		"17003" = "Exchange 2019 CU10-CU11"
+#	Updated the help text
+#	Updated the ReadMe file
 
 #Version 3.07 11-Sep-2021
 #	Added array error checking for non-empty arrays before attempting to create the Word table for most Word tables

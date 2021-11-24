@@ -148,9 +148,9 @@
 	Adds a date timestamp to the end of the file name.
 	
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2021 at 6PM is 2021-06-01_1800.
+	June 1, 2022 at 6PM is 2022-06-01_1800.
 	
-	Output filename will be ReportName_2021-06-01_1800.docx (or .pdf).
+	Output filename will be ReportName_2022-06-01_1800.docx (or .pdf).
 	
 	This parameter is disabled by default.
 	This parameter has an alias of ADT.
@@ -204,7 +204,7 @@
 
 	Script Name and Script Release date are script-specific variables.
 	Start Date Time in Local Format is a script variable.
-	Elapsed time is a calulated value.
+	Elapsed time is a calculated value.
 	Domain Name is $env:USERDNSDOMAIN.
 	Username is $env:USERNAME.
 	Folder Name is a script variable.
@@ -655,8 +655,8 @@
 
 	Adds a date time stamp to the end of the file name.
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2021 at 6PM is 2021-06-01_1800.
-	The output filename is company.tld_2021-06-01_1800.docx.
+	June 1, 2022 at 6PM is 2022-06-01_1800.
+	The output filename is company.tld_2022-06-01_1800.docx.
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -PDF -ADForest corp.carlwebster.com 
 	-AddDateTime
@@ -679,8 +679,8 @@
 
 	Adds a date time stamp to the end of the file name.
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2021 at 6PM is 2021-06-01_1800.
-	The output filename is corp.carlwebster.com_2021-06-01_1800.PDF
+	June 1, 2022 at 6PM is 2022-06-01_1800.
+	The output filename is corp.carlwebster.com_2022-06-01_1800.PDF
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -ADForest corp.carlwebster.com -Folder 
 	\\FileServer\ShareName
@@ -810,9 +810,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.07
+	VERSION: 3.08
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: September 11, 2021
+	LASTEDIT: November 24, 2021
 #>
 
 
@@ -958,10 +958,17 @@ Param(
 #
 #Version 2.0 is based on version 1.20
 #
-#Version 3.08
-#	Update schema numbers for Exchange CUs
+#Version 3.08 24-Nov-2021
+#	In Function AbortScript, add test for the winword process and terminate it if it is running
+#	In Functions AbortScript and SaveandCloseDocumentandShutdownWord, add code from Guy Leech to test for the "Id" property before using it
+#	In Function ProcessDomainControllers, added "Computer Object DN" to the output
+#		If the DN doesn't contain "OU=Domain Controllers", highlight the Word/HTML output in red and add "***" to the text output
+#	Updated Functions ShowScriptOptions and ProcessScriptEnd to add $ReportFooter
+#	Updated schema numbers for Exchange CUs
 #		"15334" = "Exchange 2016 CU21-CU22"
 #		"17003" = "Exchange 2019 CU10-CU11"
+#	Updated the help text
+#	Updated the ReadMe file
 #
 #Version 3.07 11-Sep-2021
 #	Added array error checking for non-empty arrays before attempting to create the Word table for most Word tables
@@ -979,7 +986,6 @@ Param(
 #	Updated Function OutputADFileLocations to better report on the SYSVOL state. Code supplied by Michael B. Smith.
 #	Updated Function ProcessgGPOsByOUOld to allow Word table output to handle GPOs that somehow PowerShell thinks are arrays
 #	Updated Functions SaveandCloseTextDocument and SaveandCloseHTMLDocument to add a "Report Complete" line
-#	Updated Functions ShowScriptOptions and ProcessScriptEnd to add $ReportFooter
 #	Updated the help text
 #	Updated the ReadMe file
 #	
@@ -1226,10 +1232,10 @@ $global:emailCredentials    = $Null
 ## v3.00
 $script:ExtraSpecialVerbose = $false
 
-# 3.07
-$script:MyVersion           = '3.07'
+#Report footer stuff
+$script:MyVersion           = '3.08'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "09/11/2021"
+$tmpdate                    = [datetime] "11/24/2021"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -5918,16 +5924,33 @@ Function AbortScript
 {
 	If($MSWord -or $PDF)
 	{
-		$Script:Word.quit()
 		Write-Verbose "$(Get-Date -Format G): System Cleanup"
-		[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
 		If(Test-Path variable:global:word)
 		{
-			Remove-Variable -Name word -Scope Global
+			$Script:Word.quit()
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
+			Remove-Variable -Name word -Scope Global 4>$Null
 		}
 	}
 	[gc]::collect() 
 	[gc]::WaitForPendingFinalizers()
+
+	If($MSWord -or $PDF)
+	{
+		#is the winword Process still running? kill it
+
+		#find out our session (usually "1" except on TS/RDC or Citrix)
+		$SessionID = (Get-Process -PID $PID).SessionId
+
+		#Find out if winword running in our session
+		$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
+		If( $wordprocess -and $wordprocess.Id -gt 0)
+		{
+			Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
+			Stop-Process $wordprocess.Id -EA 0
+		}
+	}
+	
 	Write-Verbose "$(Get-Date -Format G): Script has been aborted"
 	$ErrorActionPreference = $SaveEAPreference
 	Exit
@@ -6881,6 +6904,7 @@ Function ShowScriptOptions
 	Write-Verbose "$(Get-Date -Format G): IncludeUserInfo : $IncludeUserInfo"
 	Write-Verbose "$(Get-Date -Format G): Log             : $($Log)"
 	Write-Verbose "$(Get-Date -Format G): MaxDetail       : $MaxDetails"
+	Write-Verbose "$(Get-Date -Format G): Report Footer   : $ReportFooter"
 	Write-Verbose "$(Get-Date -Format G): Save As HTML    : $HTML"
 	Write-Verbose "$(Get-Date -Format G): Save As PDF     : $PDF"
 	Write-Verbose "$(Get-Date -Format G): Save As TEXT    : $TEXT"
@@ -6976,18 +7000,17 @@ Function SaveandCloseDocumentandShutdownWord
 	[gc]::collect() 
 	[gc]::WaitForPendingFinalizers()
 	
-	#is the winword process still running? kill it
+	#is the winword Process still running? kill it
 
 	#find out our session (usually "1" except on TS/RDC or Citrix)
 	$SessionID = (Get-Process -PID $PID).SessionId
 
-	#Find out if winword is running in our session
-	$wordprocess = $Null
-	$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}).Id
-	If($null -ne $wordprocess -and $wordprocess -gt 0)
+	#Find out if winword running in our session
+	$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
+	If( $wordprocess -and $wordprocess.Id -gt 0)
 	{
-		Write-Verbose "$(Get-Date -Format G): WinWord process is still running. Attempting to stop WinWord process # $($wordprocess)"
-		Stop-Process $wordprocess -EA 0
+		Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
+		Stop-Process $wordprocess.Id -EA 0
 	}
 }
 
@@ -11280,6 +11303,13 @@ Function ProcessDomainControllers
 		{
 			WriteWordLine 2 0 $DC.Name
 			[System.Collections.Hashtable[]] $ScriptInformation = @()
+			$WordHighlightedCells = New-Object System.Collections.ArrayList
+			[int] $CurrentServiceIndex = 1
+			$ScriptInformation += @{ Data = "Computer Object DN"; Value = $DC.ComputerObjectDN; }
+			If($DC.ComputerObjectDN -NotLike "*OU=Domain Controllers*")
+			{
+				$WordHighlightedCells.Add(@{ Row = $CurrentServiceIndex; Column = 2; }) > $Null
+			}
 			$ScriptInformation += @{ Data = "Default partition"; Value = $DC.DefaultPartition; }
 			$ScriptInformation += @{ Data = "Domain"; Value = $DC.domain; }
 			If($DC.Enabled -eq $True)
@@ -11394,6 +11424,10 @@ Function ProcessDomainControllers
 			-AutoFit $wdAutoFitFixed;
 
 			SetWordCellFormat -Collection $Table.Columns.Item(1).Cells -Bold -BackgroundColor $wdColorGray15;
+			If($WordHighlightedCells.Count -gt 0)
+			{
+				SetWordCellFormat -Coordinates $WordHighlightedCells -Table $Table -Bold -BackgroundColor $wdColorRed -Solid;
+			}
 
 			$Table.Columns.Item(1).Width = 140;
 			$Table.Columns.Item(2).Width = 300;
@@ -11407,6 +11441,14 @@ Function ProcessDomainControllers
 		If($Text)
 		{
 			Line 0 "///  DC: $($DC.Name)  \\\"
+			If($DC.ComputerObjectDN -NotLike "*OU=Domain Controllers*")
+			{
+				Line 1 "Computer Object DN`t`t: ***$($DC.ComputerObjectDN)***"
+			}
+			Else
+			{
+				Line 1 "Computer Object DN`t`t: " $DC.ComputerObjectDN
+			}
 			Line 1 "Default partition`t`t: " $DC.DefaultPartition
 			Line 1 "Domain`t`t`t`t: " $DC.domain
 			If($DC.Enabled -eq $True)
@@ -11519,7 +11561,16 @@ Function ProcessDomainControllers
 		{
 			WriteHTMLLine 2 0 "///&nbsp;&nbsp;$($DC.Name)&nbsp;&nbsp;\\\"
 			$rowdata = @()
-			$columnHeaders = @("Default partition",$htmlsb,$DC.DefaultPartition,$htmlwhite)
+			If($DC.ComputerObjectDN -NotLike "*OU=Domain Controllers*")
+			{
+				$HTMLHighlightedCells = $htmlred
+			}
+			Else
+			{
+				$HTMLHighlightedCells = $htmlwhite
+			} 
+			$columnHeaders = @("Computer Object DN",$htmlsb,$DC.DefaultPartition,$HTMLHighlightedCells)
+			$rowdata += @(,("Default partition",$htmlsb,$DC.DefaultPartition,$htmlwhite))
 			$rowdata += @(,('Domain',$htmlsb,$DC.domain,$htmlwhite))
 			If($DC.Enabled -eq $True)
 			{
@@ -18199,6 +18250,7 @@ Function ProcessScriptEnd
 		Out-File -FilePath $SIFile -Append -InputObject "IncludeUserInfo: $IncludeUserInfo" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "Log            : $($Log)" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "MaxDetails     : $MaxDetails" 4>$Null
+		Out-File -FilePath $SIFile -Append -InputObject "Report Footer  : $ReportFooter" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "Save As HTML   : $HTML" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "Save As PDF    : $PDF" 4>$Null
 		Out-File -FilePath $SIFile -Append -InputObject "Save As TEXT   : $TEXT" 4>$Null
