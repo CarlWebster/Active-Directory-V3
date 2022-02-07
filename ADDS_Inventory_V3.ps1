@@ -730,6 +730,19 @@
 		
 		Section         = "All"
 .EXAMPLE
+	PS C:\PSScript >.\ADDS_Inventory_V3.ps1 -Dev -ScriptInfo -Log
+	
+	Creates a default report.
+	
+	Creates a text file named ADDSInventoryScriptErrors_yyyyMMddTHHmmssffff.txt that 
+	contains up to the last 250 errors reported by the script.
+	
+	Creates a text file named ADDSInventoryScriptInfo_yyyy-MM-dd_HHmm.txt that 
+	contains all the script parameters and other basic information.
+	
+	Creates a text file for transcript logging named 
+	ADDSDocScriptTranscript_yyyyMMddTHHmmssffff.txt.
+.EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -SmtpServer mail.domain.tld -From 
 	ADAdmin@domain.tld -To ITGroup@domain.tld	
 
@@ -810,9 +823,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.08
+	VERSION: 3.09
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: November 24, 2021
+	LASTEDIT: February 7, 2022
 #>
 
 
@@ -957,6 +970,22 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.09 7-Feb-2022
+#	Added to Domain Information the data for ms-DS-MachineAccountQuota
+#	Changed the date format for the transcript and error log files from yyyy-MM-dd_HHmm format to the FileDateTime format
+#		The format is yyyyMMddTHHmmssffff (case-sensitive, using a 4-digit year, 2-digit month, 2-digit day, 
+#		the letter T as a time separator, 2-digit hour, 2-digit minute, 2-digit second, and 4-digit millisecond). 
+#		For example: 20221225T0840107271.
+#	Fixed the German Table of Contents (Thanks to Rene Bigler)
+#		From 
+#			'de-'	{ 'Automatische Tabelle 2'; Break }
+#		To
+#			'de-'	{ 'Automatisches Verzeichnis 2'; Break }
+#	In Function AbortScript, added stopping the transcript log if the log was enabled and started
+#	Replaced most script Exit calls with AbortScript to stop the transcript log if the log was enabled and started
+#	Updated the help text
+#	Updated the ReadMe file
 #
 #Version 3.08 24-Nov-2021
 #	In Function AbortScript, add test for the winword process and terminate it if it is running
@@ -1220,6 +1249,57 @@ Param(
 #	You can now select multiple output formats. This required extensive code changes.
 #
 
+Function AbortScript
+{
+	If($MSWord -or $PDF)
+	{
+		Write-Verbose "$(Get-Date -Format G): System Cleanup"
+		If(Test-Path variable:global:word)
+		{
+			$Script:Word.quit()
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
+			Remove-Variable -Name word -Scope Global 4>$Null
+		}
+	}
+	[gc]::collect() 
+	[gc]::WaitForPendingFinalizers()
+
+	If($MSWord -or $PDF)
+	{
+		#is the winword Process still running? kill it
+
+		#find out our session (usually "1" except on TS/RDC or Citrix)
+		$SessionID = (Get-Process -PID $PID).SessionId
+
+		#Find out if winword running in our session
+		$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
+		If( $wordprocess -and $wordprocess.Id -gt 0)
+		{
+			Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
+			Stop-Process $wordprocess.Id -EA 0
+		}
+	}
+	
+	Write-Verbose "$(Get-Date -Format G): Script has been aborted"
+	#stop transcript logging
+	If($Log -eq $True) 
+	{
+		If($Script:StartLog -eq $True) 
+		{
+			try 
+			{
+				Stop-Transcript | Out-Null
+				Write-Verbose "$(Get-Date -Format G): $Script:LogPath is ready for use"
+			} 
+			catch 
+			{
+				Write-Verbose "$(Get-Date -Format G): Transcript/log stop failed"
+			}
+		}
+	}
+	$ErrorActionPreference = $SaveEAPreference
+	Exit
+}
 
 Set-StrictMode -Version Latest
 
@@ -1233,9 +1313,9 @@ $global:emailCredentials    = $Null
 $script:ExtraSpecialVerbose = $false
 
 #Report footer stuff
-$script:MyVersion           = '3.08'
+$script:MyVersion           = '3.09'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "11/24/2021"
+$tmpdate                    = [datetime] "02/07/2022"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -1305,7 +1385,7 @@ If($Folder -ne "")
 			`n`n
 	Script cannot continue.
 			`n`n"
-			Exit
+			AbortScript
 		}
 	}
 	Else
@@ -1318,7 +1398,7 @@ If($Folder -ne "")
 	Script cannot continue.
 		`n`n
 		"
-		Exit
+		AbortScript
 	}
 }
 
@@ -1340,7 +1420,7 @@ If($Script:pwdpath.EndsWith("\"))
 If($Log) 
 {
 	#start transcript logging
-	$Script:LogPath = "$Script:pwdpath\ADDSDocScriptTranscript_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
+	$Script:LogPath = "$Script:pwdpath\ADDSDocScriptTranscript_$(Get-Date -f FileDateTime).txt"
 	
 	try 
 	{
@@ -1358,7 +1438,7 @@ If($Log)
 If($Dev)
 {
 	$Error.Clear()
-	$Script:DevErrorFile = "$Script:pwdpath\ADInventoryScriptErrors_$(Get-Date -f yyyy-MM-dd_HHmm).txt"
+	$Script:DevErrorFile = "$Script:pwdpath\ADInventoryScriptErrors_$(Get-Date -f FileDateTime).txt"
 }
 
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($To))
@@ -1371,7 +1451,7 @@ If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -an
 	`t`t
 	Script cannot Continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -and ![String]::IsNullOrEmpty($To))
 {
@@ -1383,7 +1463,7 @@ If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($From) -an
 	`t`t
 	Script cannot Continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($To) -and ![String]::IsNullOrEmpty($From))
 {
@@ -1395,7 +1475,7 @@ If(![String]::IsNullOrEmpty($SmtpServer) -and [String]::IsNullOrEmpty($To) -and 
 	`t`t
 	Script cannot Continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($From) -and ![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 {
@@ -1407,7 +1487,7 @@ If(![String]::IsNullOrEmpty($From) -and ![String]::IsNullOrEmpty($To) -and [Stri
 	`t`t
 	Script cannot Continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($SmtpServer))
 {
@@ -1419,7 +1499,7 @@ If(![String]::IsNullOrEmpty($From) -and [String]::IsNullOrEmpty($SmtpServer))
 	`t`t
 	Script cannot Continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 {
@@ -1431,7 +1511,7 @@ If(![String]::IsNullOrEmpty($To) -and [String]::IsNullOrEmpty($SmtpServer))
 	`t`t
 	Script cannot Continue.
 	`n`n"
-	Exit
+	AbortScript
 }
 
 $Script:DCDNSIPInfo    = New-Object System.Collections.ArrayList
@@ -3306,6 +3386,8 @@ Function SetWordHashTable
 		{
 			'ca-'	{ 'Taula automática 2'; Break }
 			'da-'	{ 'Automatisk tabel 2'; Break }
+			#'de-'	{ 'Automatische Tabelle 2'; Break }
+			'de-'	{ 'Automatisches Verzeichnis 2'; Break } #changed 6-feb-2022 rene bigler
 			'de-'	{ 'Automatische Tabelle 2'; Break }
 			'en-'	{ 'Automatic Table 2'; Break }
 			'es-'	{ 'Tabla automática 2'; Break }
@@ -3660,12 +3742,12 @@ Function CheckWordPrereq
 		If(($MSWord -eq $False) -and ($PDF -eq $True))
 		{
 			Write-Host "`n`n`t`tThis script uses Microsoft Word's SaveAs PDF function, please install Microsoft Word`n`n"
-			Exit
+			AbortScript
 		}
 		Else
 		{
 			Write-Host "`n`n`t`tThis script directly outputs to Microsoft Word, please install Microsoft Word`n`n"
-			Exit
+			AbortScript
 		}
 	}
 
@@ -3678,7 +3760,7 @@ Function CheckWordPrereq
 	{
 		$ErrorActionPreference = $SaveEAPreference
 		Write-Host "`n`n`tPlease close all instances of Microsoft Word before running this report.`n`n"
-		Exit
+		AbortScript
 	}
 }
 
@@ -3775,20 +3857,19 @@ Function SetupWord
 	# Setup word for output
 	Write-Verbose "$(Get-Date -Format G): Create Word comObject."
 	$Script:Word = New-Object -comobject "Word.Application" -EA 0 4>$Null
-	
+
+#Do not indent the following write-error lines. Doing so will mess up the console formatting of the error message.
 	If(!$? -or $Null -eq $Script:Word)
 	{
 		Write-Warning "The Word object could not be created. You may need to repair your Word installation."
 		$ErrorActionPreference = $SaveEAPreference
 		Write-Error "
 		`n`n
-		`t`t
-		The Word object could not be created. You may need to repair your Word installation.
+	The Word object could not be created. You may need to repair your Word installation.
 		`n`n
-		`t`t
-		Script cannot Continue.
+	Script cannot Continue.
 		`n`n"
-		Exit
+		AbortScript
 	}
 
 	Write-Verbose "$(Get-Date -Format G): Determine Word language value"
@@ -3806,11 +3887,9 @@ Function SetupWord
 		$ErrorActionPreference = $SaveEAPreference
 		Write-Error "
 		`n`n
-		`t`t
-		Unable to determine the Word language value. You may need to repair your Word installation.
+	Unable to determine the Word language value. You may need to repair your Word installation.
 		`n`n
-		`t`t
-		Script cannot Continue.
+	Script cannot Continue.
 		`n`n
 		"
 		AbortScript
@@ -3839,8 +3918,7 @@ Function SetupWord
 		$ErrorActionPreference = $SaveEAPreference
 		Write-Error "
 		`n`n
-		`t`t
-		Microsoft Word 2007 is no longer supported.`n`n`t`tScript will end.
+	Microsoft Word 2007 is no longer supported.`n`n`t`tScript will end.
 		`n`n
 		"
 		AbortScript
@@ -3849,24 +3927,23 @@ Function SetupWord
 	{
 		Write-Error "
 		`n`n
-		`t`t
-		The Word Version is 0. You should run a full online repair of your Office installation.
+	The Word Version is 0. You should run a full online repair of your Office installation.
 		`n`n
-		`t`t
-		Script cannot Continue.
+	Script cannot Continue.
 		`n`n
 		"
-		Exit
+		AbortScript
 	}
 	Else
 	{
 		$ErrorActionPreference = $SaveEAPreference
 		Write-Error "
 		`n`n
-		`t`t
-		You are running an untested or unsupported version of Microsoft Word.
+	You are running an untested or unsupported version of Microsoft Word.
 		`n`n
-		`t`tScript will end.`n`n`t`tPlease send info on your version of Word to webster@carlwebster.com
+	Script will end.
+		`n`n
+	Please send info on your version of Word to webster@carlwebster.com
 		`n`n
 		"
 		AbortScript
@@ -3884,7 +3961,7 @@ Function SetupWord
 		Company Name is blank so Cover Page will not show a Company Name.
 		Check HKCU:\Software\Microsoft\Office\Common\UserInfo for Company or CompanyName value.
 		You may want to use the -CompanyName parameter if you need a Company Name on the cover page.
-			" -Foreground White
+			" -ForegroundColor White
 			$Script:CoName = $TmpName
 		}
 		Else
@@ -4019,11 +4096,9 @@ Function SetupWord
 		Write-Verbose "$(Get-Date -Format G): Culture code $($Script:WordCultureCode)"
 		Write-Error "
 		`n`n
-		`t`t
-		For $($Script:WordProduct), $($CoverPage) is not a valid Cover Page option.
+	For $($Script:WordProduct), $($CoverPage) is not a valid Cover Page option.
 		`n`n
-		`t`t
-		Script cannot Continue.
+	Script cannot Continue.
 		`n`n
 		"
 		AbortScript
@@ -4047,7 +4122,7 @@ Function SetupWord
 
 	$BuildingBlocksCollection | 
 	ForEach-Object {
-		If ($_.BuildingBlockEntries.Item($CoverPage).Name -eq $CoverPage) 
+		If($_.BuildingBlockEntries.Item($CoverPage).Name -eq $CoverPage) 
 		{
 			$BuildingBlocks = $_
 		}
@@ -4076,8 +4151,8 @@ Function SetupWord
 	If(!$Script:CoverPagesExist)
 	{
 		Write-Verbose "$(Get-Date -Format G): Cover Pages are not installed or the Cover Page $($CoverPage) does not exist."
-		Write-Host "Cover Pages are not installed or the Cover Page $($CoverPage) does not exist." -Foreground White
-		Write-Host "This report will not have a Cover Page." -Foreground White
+		Write-Host "Cover Pages are not installed or the Cover Page $($CoverPage) does not exist." -ForegroundColor White
+		Write-Host "This report will not have a Cover Page." -ForegroundColor White
 	}
 
 	Write-Verbose "$(Get-Date -Format G): Create empty word doc"
@@ -4110,7 +4185,7 @@ Function SetupWord
 	}
 
 	#set Default tab stops to 1/2 inch (this line is not from Jeff Hicks)
-	#36 = .50"
+	#36 =.50"
 	$Script:Word.ActiveDocument.DefaultTabStop = 36
 
 	#Disable Spell and Grammar Check to resolve issue and improve performance (from Pat Coughlin)
@@ -4135,8 +4210,8 @@ Function SetupWord
 		If($Null -eq $toc)
 		{
 			Write-Verbose "$(Get-Date -Format G): "
-			Write-Host "Table of Content - $($Script:MyHash.Word_TableOfContents) could not be retrieved." -Foreground White
-			Write-Host "This report will not have a Table of Contents." -Foreground White
+			Write-Host "Table of Content - $($Script:MyHash.Word_TableOfContents) could not be retrieved." -ForegroundColor White
+			Write-Host "This report will not have a Table of Contents." -ForegroundColor White
 		}
 		Else
 		{
@@ -4145,8 +4220,8 @@ Function SetupWord
 	}
 	Else
 	{
-		Write-Host "Table of Contents are not installed." -Foreground White
-		Write-Host "Table of Contents are not installed so this report will not have a Table of Contents." -Foreground White
+		Write-Host "Table of Contents are not installed." -ForegroundColor White
+		Write-Host "Table of Contents are not installed so this report will not have a Table of Contents." -ForegroundColor White
 	}
 
 	#set the footer
@@ -4158,7 +4233,7 @@ Function SetupWord
 	$Script:Doc.ActiveWindow.ActivePane.view.SeekView = $wdSeekPrimaryFooter
 	#get the footer and format font
 	$footers = $Script:Doc.Sections.Last.Footers
-	ForEach ($footer in $footers) 
+	ForEach($footer in $footers) 
 	{
 		If($footer.exists) 
 		{
@@ -4176,7 +4251,6 @@ Function SetupWord
 	$Script:Selection.HeaderFooter.PageNumbers.Add($wdAlignPageNumberRight) | Out-Null
 
 	FindWordDocumentEnd
-	Write-Verbose "$(Get-Date -Format G):"
 	#end of Jeff Hicks 
 }
 
@@ -5920,42 +5994,6 @@ Function validObject( [object] $object, [string] $topLevel )
 	Return $False
 }
 
-Function AbortScript
-{
-	If($MSWord -or $PDF)
-	{
-		Write-Verbose "$(Get-Date -Format G): System Cleanup"
-		If(Test-Path variable:global:word)
-		{
-			$Script:Word.quit()
-			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($Script:Word) | Out-Null
-			Remove-Variable -Name word -Scope Global 4>$Null
-		}
-	}
-	[gc]::collect() 
-	[gc]::WaitForPendingFinalizers()
-
-	If($MSWord -or $PDF)
-	{
-		#is the winword Process still running? kill it
-
-		#find out our session (usually "1" except on TS/RDC or Citrix)
-		$SessionID = (Get-Process -PID $PID).SessionId
-
-		#Find out if winword running in our session
-		$wordprocess = ((Get-Process 'WinWord' -ea 0) | Where-Object {$_.SessionId -eq $SessionID}) | Select-Object -Property Id 
-		If( $wordprocess -and $wordprocess.Id -gt 0)
-		{
-			Write-Verbose "$(Get-Date -Format G): WinWord Process is still running. Attempting to stop WinWord Process # $($wordprocess.Id)"
-			Stop-Process $wordprocess.Id -EA 0
-		}
-	}
-	
-	Write-Verbose "$(Get-Date -Format G): Script has been aborted"
-	$ErrorActionPreference = $SaveEAPreference
-	Exit
-}
-
 Function BuildMultiColumnTable
 {
 	Param([Array]$xArray)
@@ -6948,7 +6986,7 @@ Function SaveandCloseDocumentandShutdownWord
 	If($Script:WordVersion -eq $wdWord2010)
 	{
 		#the $saveFormat below passes StrictMode 2
-		#I found this at the following link
+		#I found this at the following two links
 		#http://msdn.microsoft.com/en-us/library/microsoft.office.interop.word.wdsaveformat(v=office.14).aspx
 		If($PDF)
 		{
@@ -7264,7 +7302,7 @@ please run the script from an elevated PowerShell session using an account with 
 					Script cannot Continue.
 					`n`n
 					"
-					Exit
+					AbortScript
 				}
 				Else
 				{
@@ -7291,7 +7329,7 @@ please run the script from an elevated PowerShell session using an account with 
 			Script cannot Continue.
 			`n`n
 			"
-			Exit
+			AbortScript
 		}
 	}
 
@@ -7315,7 +7353,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Script cannot Continue.
 				`n`n
 				"
-				Exit
+				AbortScript
 			}
 		}
 		Else
@@ -7337,7 +7375,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Is $ComputerName running Active Directory Web Services?
 				`n`n
 				"
-				Exit
+				AbortScript
 			}
 		}
 		
@@ -7361,7 +7399,7 @@ please run the script from an elevated PowerShell session using an account with 
 		Script cannot Continue.
 		`n`n
 			"
-			Exit
+			AbortScript
 		}
 	}
 	
@@ -7384,7 +7422,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Script cannot Continue.
 				`n`n
 				"
-				Exit
+				AbortScript
 			}
 		}
 		Else
@@ -7406,7 +7444,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Is $ComputerName running Active Directory Web Services?
 				`n`n
 				"
-				Exit
+				AbortScript
 			}
 		}
 		Write-Verbose "$(Get-Date -Format G): `t$ADDomain is a valid domain name"
@@ -7433,7 +7471,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Script cannot Continue.
 				`n`n
 				"
-				Exit
+				AbortScript
 			}
 		}
 		Else
@@ -7455,7 +7493,7 @@ please run the script from an elevated PowerShell session using an account with 
 				Is $ComputerName running Active Directory Web Services?
 				`n`n
 				"
-				Exit
+				AbortScript
 			}
 		}
 		Write-Verbose "$(Get-Date -Format G): `tFound forest information for $tmp"
@@ -10007,6 +10045,21 @@ Function ProcessDomains
 				$LastLogonReplicationInterval = $DomainInfo.LastLogonReplicationInterval.ToString()
 			}
 			
+			#added in 3.09
+			#https://www.jorgebernhardt.com/how-to-change-attribute-ms-ds-machineaccountquota/
+			$tmpMachineAccountQuota = Get-ADObject -Identity $DomainInfo.DistinguishedName -Properties ms-DS-MachineAccountQuota -EA 0
+			
+			If($? -and $Null -ne $tmpMachineAccountQuota)
+			{
+				$MachineAccountQuota = $tmpMachineAccountQuota.'ms-DS-MachineAccountQuota'.ToString()
+			}
+			Else
+			{
+				$MachineAccountQuota = "Unable to retrieve"
+			}
+			$tmpMachineAccountQuota = $Null
+			#end add
+			
 			If($MSWORD -or $PDF)
 			{
 				[System.Collections.Hashtable[]] $ScriptInformation = @()
@@ -10073,6 +10126,7 @@ Function ProcessDomains
 				$ScriptInformation += @{ Data = "Infrastructure master"; Value = $DomainInfo.InfrastructureMaster; }
 				$ScriptInformation += @{ Data = "Last logon replication interval"; Value = $LastLogonReplicationInterval; }
 				$ScriptInformation += @{ Data = "Lost and Found container"; Value = $DomainInfo.LostAndFoundContainer; }
+				$ScriptInformation += @{ Data = "Machine account quota"; Value = $MachineAccountQuota; }
 				If(![String]::IsNullOrEmpty($DomainInfo.ManagedBy))
 				{
 					$ScriptInformation += @{ Data = "Managed by"; Value = $DomainInfo.ManagedBy; }
@@ -10236,6 +10290,7 @@ Function ProcessDomains
 				Line 1 "Infrastructure master`t`t`t: " $DomainInfo.InfrastructureMaster
 				Line 1 "Last logon replication interval`t`t: " $LastLogonReplicationInterval
 				Line 1 "Lost and Found container`t`t: " $DomainInfo.LostAndFoundContainer
+				Line 1 "Machine account quota`t`t`t: " $MachineAccountQuota
 				If(![String]::IsNullOrEmpty($DomainInfo.ManagedBy))
 				{
 					Line 1 "Managed by`t`t`t`t: " $DomainInfo.ManagedBy
@@ -10385,6 +10440,7 @@ Function ProcessDomains
 				$rowdata += @(,('Infrastructure master',$htmlsb,$DomainInfo.InfrastructureMaster,$htmlwhite))
 				$rowdata += @(,("Last logon replication interval",$htmlsb,$LastLogonReplicationInterval,$htmlwhite))
 				$rowdata += @(,('Lost and Found container',$htmlsb,$DomainInfo.LostAndFoundContainer,$htmlwhite))
+				$rowdata += @(,("Machine account quota",$htmlsb,$MachineAccountQuota,$htmlwhite))
 				If(![String]::IsNullOrEmpty($DomainInfo.ManagedBy))
 				{
 					$rowdata += @(,('Managed by',$htmlsb,$DomainInfo.ManagedBy,$htmlwhite))
@@ -12794,6 +12850,7 @@ Function ProcessGroupInformation
 
 		#get all Groups for the domain
 		$Groups = $Null
+		
 		$Groups = Get-ADGroup -Filter * -Server $Domain -Properties Name, GroupCategory, GroupType -EA 0 | Sort-Object Name
 
 		If( !$? )
@@ -15712,7 +15769,7 @@ Function getDSUsers
     catch [Exception] 
     {
         Write-Error $_.Exception.Message
-        exit
+        AbortScript
     }
 
     # Get AD Distinguished Name
