@@ -8,6 +8,16 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.10 23-Apr-2022
+#	Added Windows Server 2022 to AD Schema version 88
+#	Fixed some text output alignment
+#	In Function OutputNicItem, fixed several issues with DHCP data
+#	Replaced all Get-WmiObject with Get-CimInstance
+#	Some general code cleanup
+#	Updated schema numbers for Exchange CUs
+#		"15334" = "Exchange 2016 CU21-CU22"
+#		"17003" = "Exchange 2019 CU10-CU11"
+
 #Version 3.09 7-Feb-2022
 #	Added to Domain Information the data for ms-DS-MachineAccountQuota
 #	Changed the date format for the transcript and error log files from yyyy-MM-dd_HHmm format to the FileDateTime format
