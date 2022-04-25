@@ -978,8 +978,8 @@ Param(
 #	Replaced all Get-WmiObject with Get-CimInstance
 #	Some general code cleanup
 #	Updated schema numbers for Exchange CUs
-#		"15334" = "Exchange 2016 CU21-CU22"
-#		"17003" = "Exchange 2019 CU10-CU11"
+#		"15334" = "Exchange 2016 CU21-CU23"
+#		"17003" = "Exchange 2019 CU10-CU12"
 #
 #Version 3.09 7-Feb-2022
 #	Added to Domain Information the data for ms-DS-MachineAccountQuota
@@ -2710,7 +2710,7 @@ Function OutputNicItem
 	If($nic.dhcpenabled)
 	{
 		$DHCPLeaseObtainedDate = $nic.dhcpleaseobtained.ToLocalTime()
-		$DHCPLeaseExpiresDate = $nic.dhcpleaseexpires.ToLocalTIme()
+		$DHCPLeaseExpiresDate = (Get-Date).AddSeconds([UInt32]::MaxValue).ToLocalTime()
 	}
 		
 	If($MSWORD -or $PDF)
