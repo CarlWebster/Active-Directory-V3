@@ -2710,7 +2710,15 @@ Function OutputNicItem
 	If($nic.dhcpenabled)
 	{
 		$DHCPLeaseObtainedDate = $nic.dhcpleaseobtained.ToLocalTime()
-		$DHCPLeaseExpiresDate = (Get-Date).AddSeconds([UInt32]::MaxValue).ToLocalTime()
+		If($nic.DHCPLeaseExpires -lt $nic.DHCPLeaseObtained)
+		{
+			#Could be an Azure DHCP Lease
+			$DHCPLeaseExpiresDate = (Get-Date).AddSeconds([UInt32]::MaxValue).ToLocalTime()
+		}
+		Else
+		{
+			$DHCPLeaseExpiresDate = $nic.DHCPLeaseExpires.ToLocalTime()
+		}
 	}
 		
 	If($MSWORD -or $PDF)
