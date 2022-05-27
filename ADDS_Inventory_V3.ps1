@@ -823,9 +823,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.10
+	VERSION: 3.11
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: April 23, 2022
+	LASTEDIT: May 27, 2022
 #>
 
 
@@ -970,6 +970,12 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.11 27-May-2022
+#	Fixed bug in Function getDSUsers with MaxPasswordAge reported by Danny de Kooker
+#	Moved the following section headings so that the error/warning/notice messages had a section heading
+#		Domain Controllers
+#		Fine-grained password policies
 #
 #Version 3.10 23-Apr-2022
 #	Added Windows Server 2022 to AD Schema version 88
@@ -1323,9 +1329,9 @@ $global:emailCredentials    = $Null
 $script:ExtraSpecialVerbose = $false
 
 #Report footer stuff
-$script:MyVersion           = '3.10'
+$script:MyVersion           = '3.11'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "04/23/2022"
+$tmpdate                    = [datetime] "05/27/2022"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -10784,6 +10790,20 @@ Function ProcessDomains
 			}
 			
 			Write-Verbose "$(Get-Date -Format G): `t`tProcessing domain controllers"
+			#3.11 move the headings out so the error or notice hss a section heading
+			If($MSWord -or $PDF)
+			{
+				WriteWordLine 3 0 "Domain Controllers"
+			}
+			If($Text)
+			{
+				Line 0 "Domain Controllers: "
+			}
+			If($HTML)
+			{
+				WriteHTMLLine 3 0 "Domain Controllers"
+			}
+
 			$DomainControllers = $Null
 			$DomainControllers = Get-ADDomainController -Filter * -Server $DomainInfo.DNSRoot -EA 0 | Sort-Object Name
 			
@@ -10796,7 +10816,6 @@ Function ProcessDomains
 				If($MSWord -or $PDF)
 				{
 					[System.Collections.Hashtable[]] $WordTable = @();
-					WriteWordLine 3 0 "Domain Controllers"
 					ForEach($DomainController in $DomainControllers)
 					{
 						$WordTableRowHash = @{
@@ -10826,7 +10845,6 @@ Function ProcessDomains
 				}
 				If($Text)
 				{
-					Line 0 "Domain Controllers: "
 					ForEach($DomainController in $DomainControllers)
 					{
 						Line 1 $DomainController.Name
@@ -10836,7 +10854,6 @@ Function ProcessDomains
 				If($HTML)
 				{
 					$rowdata = @()
-					WriteHTMLLine 3 0 "Domain Controllers"
 					ForEach($DomainController in $DomainControllers)
 					{
 						$rowdata += @(,($DomainController.Name,$htmlwhite))
@@ -10889,24 +10906,25 @@ Function ProcessDomains
 			#are FGPP cmdlets available
 			If(Get-Command -Name "Get-ADFineGrainedPasswordPolicy" -ea 0)
 			{
+				#3.11 move the headings out so the error or notice hss a section heading
+				If($MSWord -or $PDF)
+				{
+					WriteWordLine 3 0 "Fine Grained Password Policies"
+				}
+				If($Text)
+				{
+					Line 0 "Fine Grained Password Policies"
+				}
+				If($HTML)
+				{
+					WriteHTMLLine 3 0 "Fine Grained Password Policies"
+				}
+				
 				$FGPPs = $Null
 				$FGPPs = Get-ADFineGrainedPasswordPolicy -Searchbase $DomainInfo.DistinguishedName -Filter * -Properties * -Server $DomainInfo.DNSRoot -EA 0 | Sort-Object Precedence, ObjectGUID
 				
 				If($? -and $Null -ne $FGPPs)
 				{
-					If($MSWord -or $PDF)
-					{
-						WriteWordLine 3 0 "Fine Grained Password Policies"
-					}
-					If($Text)
-					{
-						Line 0 "Fine Grained Password Policies"
-					}
-					If($HTML)
-					{
-						WriteHTMLLine 3 0 "Fine Grained Password Policies"
-					}
-					
 					ForEach($FGPP in $FGPPs)
 					{
 						If($MSWord -or $PDF)
@@ -15807,7 +15825,8 @@ Function getDSUsers
 		### Using ConvertLargeIntegerToInt64 takes the COM object and converts 
 		### it into a native .Net type.
 
-		#[Int64] $script:MaxPasswordAge = $domainADSI.ConvertLargeIntegerToInt64( $domainADSI.maxPwdAge.Value )
+		#Uncomment this line in 3.11 to fix bug reported by Danny de Kooker
+		[Int64] $script:MaxPasswordAge = $domainADSI.ConvertLargeIntegerToInt64( $domainADSI.maxPwdAge.Value )
 
 		### Convert to days
 		### 	there are 86,400 seconds per day (24 * 60 * 60)
@@ -15816,7 +15835,8 @@ Function getDSUsers
 
 		#Update for 3.03 from MBS
 
-		[Int64] $script:MaxPasswordAge = ( -$MaxPasswordAge / ( 86400 * 10000000 ) )
+		#Comment this line in 3.11 to fix bug reported by Danny de Kooker
+		#[Int64] $script:MaxPasswordAge = ( -$MaxPasswordAge / ( 86400 * 10000000 ) )
 		
 		If( $script:MaxPasswordAge -eq [Int64]::MinValue )
 		{
