@@ -823,9 +823,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.11
+	VERSION: 3.20
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: May 27, 2022
+	LASTEDIT: June 17, 2024
 #>
 
 
@@ -970,6 +970,9 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.20
+#
 #
 #Version 3.11 27-May-2022
 #	Fixed bug in Function getDSUsers with MaxPasswordAge reported by Danny de Kooker
