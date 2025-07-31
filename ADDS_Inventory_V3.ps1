@@ -823,9 +823,9 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.11
+	VERSION: 3.20
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: May 27, 2022
+	LASTEDIT: July 31, 2025
 #>
 
 
@@ -970,6 +970,16 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.20 31-Jul-2025, update done by Michael B. Smith
+#	An RODC may not have a dnsHostName attribute. In that case, store the Name attribute instead
+#	Correct configNC coercion (the prior way worked, but was the difficult way to do it)
+#	Machine Account Quota was not retrieved for all AD domains, only for the forest root. Fixed. Reported by zjorz.
+#	Speeded up the function Line
+#	Speeded up the function WriteWordLine
+#	Updated ForestMode and DomainMode to include Windows Server 2025 (Webster)
+#	Updated Schema Version Table for Windows Server 2025 and Exchange 2019 CU10-CU15/SE (Webster)
+#	When a DC is offline, say in the error that TCP port 88 was checked
 #
 #Version 3.11 27-May-2022
 #	Fixed bug in Function getDSUsers with MaxPasswordAge reported by Danny de Kooker
@@ -1329,9 +1339,9 @@ $global:emailCredentials    = $Null
 $script:ExtraSpecialVerbose = $false
 
 #Report footer stuff
-$script:MyVersion           = '3.11'
+$script:MyVersion           = '3.20'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "05/27/2022"
+$tmpdate                    = [datetime] "06/17/2024"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -4488,6 +4498,7 @@ Function line
 #created March 2011
 #updated March 2014
 # updated March 2019 to use StringBuilder (about 100 times more efficient than simple strings)
+# updated June 2024
 {
 	Param
 	(
@@ -4498,13 +4509,15 @@ Function line
 		[Switch] $nonewline
 	)
 
+	$null = $global:Output.Append( "`t" * $tabs )
+	<#
 	while( $tabs -gt 0 )
 	{
 		#V3.00 - Switch to using a StringBuilder for $global:Output
 		$null = $global:Output.Append( "`t" )
 		$tabs--
 	}
-
+	#>
 	If( $nonewline )
 	{
 		#V3.00 - Switch to using a StringBuilder for $global:Output
@@ -4579,10 +4592,13 @@ Function WriteWordLine
 	}
 	
 	#build # of tabs
+<#	2024-06-17
 	While($tabs -gt 0)
 	{ 
 		$output += "`t"; $tabs--; 
 	}
+#>
+	$output += "`t" * $tabs
  
 	If(![String]::IsNullOrEmpty($fontName)) 
 	{
@@ -7348,7 +7364,7 @@ please run the script from an elevated PowerShell session using an account with 
 	{
 		#get server name
 		#first test to make sure the server is reachable
-		Write-Verbose "$(Get-Date -Format G): Testing to see if $ComputerName is online and reachable"
+		Write-Verbose "$(Get-Date -Format G): Testing to see if $ComputerName is online and reachable on TCP port 88"
 		#If(Test-Connection -ComputerName $ComputerName -quiet -EA 0)
 		If(Test-NetConnection -ComputerName $ComputerName -Port 88 -InformationLevel Quiet -EA 0) #port 88 is the KDC and is unique to DCs (thanks to Matthew Woolnough)
 		{
@@ -7394,12 +7410,12 @@ please run the script from an elevated PowerShell session using an account with 
 		}
 		Else
 		{
-			Write-Verbose "$(Get-Date -Format G): Computer $ComputerName is offline"
+			Write-Verbose "$(Get-Date -Format G): Computer $ComputerName is offline (TCP port 88)"
 			$ErrorActionPreference = $SaveEAPreference
 			Write-Error "
 			`n`n
 			`t`t
-			Computer $ComputerName is offline.
+			Computer $ComputerName is offline (TCP port 88).
 			`n`n
 			`t`t
 			Script cannot Continue.
@@ -7616,14 +7632,15 @@ Function ProcessForestInformation
 
 	Switch ($Script:Forest.ForestMode)
 	{
-		"0"	{$ForestMode = "Windows 2000"; Break}
-		"1" {$ForestMode = "Windows Server 2003 interim"; Break}
-		"2" {$ForestMode = "Windows Server 2003"; Break}
-		"3" {$ForestMode = "Windows Server 2008"; Break}
-		"4" {$ForestMode = "Windows Server 2008 R2"; Break}
-		"5" {$ForestMode = "Windows Server 2012"; Break}
-		"6" {$ForestMode = "Windows Server 2012 R2"; Break}
-		"7" {$ForestMode = "Windows Server 2016"; Break}	#added V2.20
+		"0"		{$ForestMode = "Windows 2000"; Break}
+		"1" 	{$ForestMode = "Windows Server 2003 interim"; Break}
+		"2" 	{$ForestMode = "Windows Server 2003"; Break}
+		"3" 	{$ForestMode = "Windows Server 2008"; Break}
+		"4" 	{$ForestMode = "Windows Server 2008 R2"; Break}
+		"5" 	{$ForestMode = "Windows Server 2012"; Break}
+		"6" 	{$ForestMode = "Windows Server 2012 R2"; Break}
+		"7" 	{$ForestMode = "Windows Server 2016"; Break} #added V2.20
+		"10"	{$ForestMode = "Windows Server 2025"; Break} #added V3.20
 		"Windows2000Forest"        {$ForestMode = "Windows 2000"; Break}
 		"Windows2003InterimForest" {$ForestMode = "Windows Server 2003 interim"; Break}
 		"Windows2003Forest"        {$ForestMode = "Windows Server 2003"; Break}
@@ -7633,6 +7650,7 @@ Function ProcessForestInformation
 		"Windows2012R2Forest"      {$ForestMode = "Windows Server 2012 R2"; Break}
 		"WindowsThresholdForest"   {$ForestMode = "Windows Server 2016 TP4"; Break}
 		"Windows2016Forest"		   {$ForestMode = "Windows Server 2016"; Break}
+		"Windows2025Forest"		   {$ForestMode = "Windows Server 2025"; Break} #added V3.20
 		"UnknownForest"            {$ForestMode = "Unknown Forest Mode"; Break}
 		Default                    {$ForestMode = "Unable to determine Forest Mode: $($Script:Forest.ForestMode)"; Break}
 	}
@@ -8335,7 +8353,13 @@ Function ProcessAllDCsInTheForest
 
 		ForEach($Result in $Results)
 		{
-			$null = $AllDCs.Add($Result.Properties.Item('dnshostname'))
+			#V3.20 - RODC may, or may not, have dnshostname attribute
+			$hn = $Result.Properties.Item( 'dnshostname' )
+			if( [String]::IsNullOrEmpty( $hn ) )
+			{
+				$hn = $Result.Properties.Item( 'name' )
+			}
+			$null = $AllDCs.Add( $hn )
 		}
 
 		If( $Results )
@@ -8528,7 +8552,8 @@ Function ProcessCAInformation
 
 	$rootDSE = [ADSI]'LDAP://RootDSE'
 
-	$configNC = $rootDSE.Properties[ 'configurationNamingContext' ].Value -as [String]
+	#V3.20
+	$configNC = $rootDSE.Properties[ 'configurationNamingContext' ].Item( 0 )
 
 	$rootCA  = 'CN=Certification Authorities,CN=Public Key Services,CN=Services,' + $configNC
 	$rootObj = [ADSI]( 'LDAP://' + $rootCA )
@@ -9918,6 +9943,7 @@ Function ProcessDomains
 	"72" = "Windows Server 2016 TP4";
 	"87" = "Windows Server 2016";
 	"88" = "Windows Server 2019/2022";	#added V2.20, updated in 2.22, updated in 3.10
+	"91" = "Windows Server 2025"; #added V3.20
 	"4397" = "Exchange 2000 RTM"; 
 	"4406" = "Exchange 2000 SP3";
 	"6870" = "Exchange 2003 RTM, SP1, SP2"; 
@@ -9948,7 +9974,7 @@ Function ProcessDomains
 	"17000" = "Exchange 2019 RTM/CU1"; #added in 2.22, updated in 2.24
 	"17001" = "Exchange 2019 CU2-CU7"; #added in 2.24, updated in 3.02
 	"17002" = "Exchange 2019 CU8/CU9"; #added in 3.02, updated in 3.05
-	"17003" = "Exchange 2019 CU10-CU12"; #added in 3.05, updated in 3.08, updated in 3.10
+	"17003" = "Exchange 2019 CU10-CU15/SE"; #added in 3.05, updated in 3.08, updated in 3.10, updated in 3.20
 	}
 
 	ForEach($Domain in $Script:Domains)
@@ -10038,14 +10064,15 @@ Function ProcessDomains
 
 			Switch ($DomainInfo.DomainMode)
 			{
-				"0"	{$DomainMode = "Windows 2000"; Break}
-				"1" {$DomainMode = "Windows Server 2003 mixed"; Break}
-				"2" {$DomainMode = "Windows Server 2003"; Break}
-				"3" {$DomainMode = "Windows Server 2008"; Break}
-				"4" {$DomainMode = "Windows Server 2008 R2"; Break}
-				"5" {$DomainMode = "Windows Server 2012"; Break}
-				"6" {$DomainMode = "Windows Server 2012 R2"; Break}
-				"7" {$DomainMode = "Windows Server 2016"; Break}	#added V2.20
+				"0"		{$DomainMode = "Windows 2000"; Break}
+				"1" 	{$DomainMode = "Windows Server 2003 mixed"; Break}
+				"2" 	{$DomainMode = "Windows Server 2003"; Break}
+				"3" 	{$DomainMode = "Windows Server 2008"; Break}
+				"4" 	{$DomainMode = "Windows Server 2008 R2"; Break}
+				"5" 	{$DomainMode = "Windows Server 2012"; Break}
+				"6" 	{$DomainMode = "Windows Server 2012 R2"; Break}
+				"7" 	{$DomainMode = "Windows Server 2016"; Break} #added V2.20
+				"10"	{$DomainMode = "Windows Server 2016"; Break} #added V3.20
 				"Windows2000Domain"   		{$DomainMode = "Windows 2000"; Break}
 				"Windows2003Mixed"    		{$DomainMode = "Windows Server 2003 mixed"; Break}
 				"Windows2003Domain"   		{$DomainMode = "Windows Server 2003"; Break}
@@ -10055,6 +10082,7 @@ Function ProcessDomains
 				"Windows2012R2Domain" 		{$DomainMode = "Windows Server 2012 R2"; Break}
 				"WindowsThresholdDomain"	{$DomainMode = "Windows Server 2016 TP"; Break}
 				"Windows2016Domain"			{$DomainMode = "Windows Server 2016"; Break}
+				"Windows2025Domain"			{$DomainMode = "Windows Server 2025"; Break} #added in V3.20
 				"UnknownDomain"       		{$DomainMode = "Unknown Domain Mode"; Break}
 				Default               		{$DomainMode = "Unable to determine Domain Mode: $($DomainInfo.DomainMode)"; Break}
 			}
@@ -10123,7 +10151,9 @@ Function ProcessDomains
 			
 			#added in 3.09
 			#https://www.jorgebernhardt.com/how-to-change-attribute-ms-ds-machineaccountquota/
-			$tmpMachineAccountQuota = Get-ADObject -Identity $DomainInfo.DistinguishedName -Properties ms-DS-MachineAccountQuota -EA 0
+			$tmpMachineAccountQuota = Get-ADObject -Identity $DomainInfo.DistinguishedName `
+				-Server $Domain `
+				-Properties ms-DS-MachineAccountQuota -EA 0
 			
 			If($? -and $Null -ne $tmpMachineAccountQuota)
 			{
@@ -12544,6 +12574,35 @@ Function OutputEventLogInfo
 #endregion
 
 #region organizational units
+
+$Script:OUs = @{}
+
+function GetOU
+{
+	Param
+	(
+		[String] $Domain
+	)
+
+	## caches the OUs in $Domain
+
+	if( $Script:OUs.Contains( $Domain ) )
+	{
+		$results = $Script:OUs[ $Domain ]
+	}
+	else
+	{
+		$results = @( Get-ADOrganizationalUnit -Filter * -Server $Domain -EA 0 `
+			-Properties CanonicalName, DistinguishedName, Name, Created, ProtectedFromAccidentalDeletion |
+			Select-Object CanonicalName, DistinguishedName, Name, Created, ProtectedFromAccidentalDeletion |
+			Sort-Object CanonicalName )
+
+		$Script:OUs[ $Domain ] = $results
+	}
+
+	return $results
+}
+
 Function ProcessOrganizationalUnits
 {
 	Write-Verbose "$(Get-Date -Format G): Writing OU data by Domain"
@@ -12609,11 +12668,9 @@ Function ProcessOrganizationalUnits
 		
 		#get all OUs for the domain
 		#V3.00 - see optimizations applied to getDSUsers
-		$OUs = @(Get-ADOrganizationalUnit -Filter * -Server $Domain `
-		-Properties CanonicalName, DistinguishedName, Name, Created, ProtectedFromAccidentalDeletion -EA 0 | `
-		Select-Object CanonicalName, DistinguishedName, Name, Created, ProtectedFromAccidentalDeletion | `
-		Sort-Object CanonicalName)
-		
+		#V3.20 - use cached result
+		$OUs = GetOU $Domain
+
 		#V3.00 - simplify-logic - FIXME
 		If( !$? )
 		{
@@ -15005,23 +15062,9 @@ Function ProcessgGPOsByOUOld
 		#V3.00
 		Write-Verbose "$(Get-Date -Format G): `tSearching for all OUs in domain $($Domain)"
 
-		## FIXME - we get "all OUs for the domain" three times in this script - that needs to be fixed.
-		## [Webster] not really. ProcessGPOsByOUNew and ProcessGPOsByOUOld are separate Functions and never used in the same script run
-		## ProcessOrganizationUnits uses different OU properties. So, $OUs is only used twice but each is different.
-		
-		## FIXME - v3.00 see optimizations applied in getDSUsers
 		#get all OUs for the domain
-		$OUs = @(Get-ADOrganizationalUnit -Filter * -Server $Domain `
-			-Properties CanonicalName, DistinguishedName, Name -EA 0 | `
-			Select-Object CanonicalName, DistinguishedName, Name | `
-			Sort-Object CanonicalName)
-		
-		If( !$? )
-		{
-			Write-Warning "Error retrieving OU base data for OU $($OU.CanonicalName)"
-			Continue
-		}
-
+		#V3.20 - used cached results
+		$OUs = GetOU $Domain
 		If( $null -eq $OUs )
 		{
 			If($MSWORD -or $PDF)
@@ -15052,9 +15095,9 @@ Function ProcessgGPOsByOUOld
 			$OUDisplayName = $OU.CanonicalName.SubString($OU.CanonicalName.IndexOf("/")+1)
 			Write-Verbose "$(Get-Date -Format G): `t`tProcessing OU $($OU.CanonicalName) - OU # $OUCount of $NumOUs"
 			
-			#V3.00 FIXME MAYBE???? LinkedGroupPolicyObjects
+			#V3.20 FIXME MAYBE???? LinkedGroupPolicyObjects
+			#would it be faster to add this attribute to GetOU? or have the separate call to GetADOU?
 			#get data for the individual OU
-			##$OUInfo = Get-ADOrganizationalUnit -Identity $OU.DistinguishedName -Server $Domain -Properties * -EA 0 
 			$OUInfo = Get-ADOrganizationalUnit -Identity $OU.DistinguishedName -Server $Domain `
 				-Properties LinkedGroupPolicyObjects -EA 0 
 			
@@ -15312,30 +15355,8 @@ Function ProcessgGPOsByOUNew
 		Write-Verbose "$(Get-Date -Format G): `tSearching for all OUs in domain $($Domain)"
 
 		#get all OUs for the domain
-		$OUs = @(Get-ADOrganizationalUnit -Filter * -Server $Domain `
-			-Properties CanonicalName, DistinguishedName, Name -EA 0 | `
-			Select-Object CanonicalName, DistinguishedName, Name | `
-			Sort-Object CanonicalName)
-
-		If( !$? )
-		{
-			$txt = "Error retrieving OU data for domain $($Domain)"
-			Write-Warning $txt
-			If($MSWORD -or $PDF)
-			{
-				WriteWordLine 0 0 $txt "" $Null 0 $False $True
-			}
-			If($Text)
-			{
-				Line 0 $txt
-			}
-			If($HTML)
-			{
-				WriteHTMLLine 0 0 $txt
-			}
-
-			Continue
-		}
+		#V3.20 use cached OUs
+		$OUs = GetOU $Domain
 
 		If( $null -eq $OUs )
 		{
@@ -15635,7 +15656,8 @@ Function ProcessOUsForBlockedInheritance
 
 		$DomainName = $DomainInfo.Name
 		#$DomainFQDN = $DomainInfo.DNSRoot
-		
+
+		## FIXME - maybe - can we use the results from GetOU here???
 		$source             = New-Object System.DirectoryServices.DirectorySearcher( "LDAP://$DomainName" )
 		$source.SearchScope = 'Subtree'
 		$source.PageSize    = 1000

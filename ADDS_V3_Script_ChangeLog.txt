@@ -8,6 +8,16 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.20 31-Jul-2025, update done by Michael B. Smith
+#	An RODC may not have a dnsHostName attribute. In that case, store the Name attribute instead
+#	Correct configNC coercion (the prior way worked, but was the difficult way to do it)
+#	Machine Account Quota was not retrieved for all AD domains, only for the forest root. Fixed. Reported by zjorz.
+#	Speeded up the function Line
+#	Speeded up the function WriteWordLine
+#	Updated ForestMode and DomainMode to include Windows Server 2025 (Webster)
+#	Updated Schema Version Table for Windows Server 2025 and Exchange 2019 CU10-CU15/SE (Webster)
+#	When a DC is offline, say in the error that TCP port 88 was checked
+
 #Version 3.11 27-May-2022
 #	Fixed bug in Function getDSUsers with MaxPasswordAge reported by Danny de Kooker
 #	Moved the following section headings so that the error/warning/notice messages had a section heading
@@ -187,7 +197,7 @@
 #		Account is Disabled
 #	Updated the help text
 #	Updated the ReadMe file
-#	When processing Groups for attribute adminCount -eq 1, fixed where the group name doesn’t match the samAccountName or the distinguishedName
+#	When processing Groups for attribute adminCount -eq 1, fixed where the group name doesn t match the samAccountName or the distinguishedName
 #	When processing Groups that have attribute adminCount -eq 1, check if there was an error retrieving members of the group
 #		If there was an error, add the text "Unable to retrieve group members. Check for orphaned SIDs." in place of the group members
 
@@ -268,9 +278,9 @@
 #		Updated Functions Line and SaveAndCloseTextDocument
 #	Fix Swedish Table of Contents (Thanks to Johan Kallio)
 #		From 
-#			'sv-'	{ 'Automatisk innehållsförteckning2'; Break }
+#			'sv-'	{ 'Automatisk inneh llsf rteckning2'; Break }
 #		To
-#			'sv-'	{ 'Automatisk innehållsförteckn2'; Break }
+#			'sv-'	{ 'Automatisk inneh llsf rteckn2'; Break }
 #	Fixed all WriteHTMLLine lines that were supposed to be in bold. Used MBS' updates.
 #	Fixed issues with the Domain Admins Privileged Group where the user type was assumed to be a User
 #		Added checking for the object type and handling Groups and Users
