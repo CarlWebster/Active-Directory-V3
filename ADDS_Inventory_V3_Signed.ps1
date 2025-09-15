@@ -54,17 +54,17 @@
 	
 	To run the script from a workstation, RSAT is required.
 	
-	Remote Server Administration Tools for Windows 7 with Service Pack 1 (SP1)
-		https://carlwebster.sharefile.com/d-sace5ee0f1ada47289ca14be544878a24
-		
-	Remote Server Administration Tools for Windows 8 
-		https://carlwebster.sharefile.com/d-s791075d451fc415ca83ec8958b385a95
-		
-	Remote Server Administration Tools for Windows 8.1 
-		https://carlwebster.sharefile.com/d-s37209afb73dc48f497745924ed854226
-		
-	Remote Server Administration Tools for Windows 10
-		http://www.microsoft.com/en-us/download/details.aspx?id=45520
+    Remote Server Administration Tools for Windows 7 with Service Pack 1 (SP1)
+        https://www.dropbox.com/scl/fi/08kiotv8gfvqir2zgw101/Windows6.1-KB958830-x64-RefreshPkg.msu?rlkey=i3jd840zyley4jl8511t7qskr&dl=0
+
+    Remote Server Administration Tools for Windows 8
+        https://www.dropbox.com/scl/fi/gsko69f7wu7byrfcb27uk/Windows6.2-KB2693643-x64.msu?rlkey=0kutsi07hlkvvsapp28tbxh73&dl=0
+
+    Remote Server Administration Tools for Windows 8.1
+        https://www.dropbox.com/scl/fi/66g2nt8jmxod6qugv4m8t/Windows8.1-KB2693643-x64.msu?rlkey=zvialkxe9suixb9s7nyfggv8f&dl=0
+
+    Remote Server Administration Tools for Windows 10
+        https://www.dropbox.com/scl/fi/o6u3m2c37ydoeu5z0vc1u/WindowsTH-KB2693643-x64.msu?rlkey=6u02xwdn04djt1zn5tq1temvo&dl=0
 	
 .PARAMETER ADDomain
 	Specifies an Active Directory domain object by providing one of the following 
@@ -825,7 +825,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.20
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 31, 2025
+	LASTEDIT: September 15, 2025
 #>
 
 
@@ -972,6 +972,10 @@ Param(
 #Version 2.0 is based on version 1.20
 #
 #Version 3.20 31-Jul-2025, update done by Michael B. Smith
+#
+#####
+#	September 15, 2025, created a slipstreamed update for 3.20 to update references from ShareFile to Dropbox
+#####
 #	An RODC may not have a dnsHostName attribute. In that case, store the Name attribute instead
 #	Correct configNC coercion (the prior way worked, but was the difficult way to do it)
 #	Machine Account Quota was not retrieved for all AD domains, only for the forest root. Fixed. Reported by zjorz.
@@ -1341,7 +1345,7 @@ $script:ExtraSpecialVerbose = $false
 #Report footer stuff
 $script:MyVersion           = '3.20'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "06/17/2024"
+$tmpdate                    = [datetime] "09/15/2025"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -18613,8 +18617,8 @@ ProcessGCCollect 'ScriptEnd'
 # SIG # Begin signature block
 # MIIthQYJKoZIhvcNAQcCoIItdjCCLXICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUvLeRAGxFONLUwDX0N/7lWyic
-# bfWggibfMIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUHqYrNGxVV94lCrCZEQ9yKVJB
+# 7uuggibfMIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0B
 # AQwFADBlMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYD
 # VQQLExB3d3cuZGlnaWNlcnQuY29tMSQwIgYDVQQDExtEaWdpQ2VydCBBc3N1cmVk
 # IElEIFJvb3QgQ0EwHhcNMjIwODAxMDAwMDAwWhcNMzExMTA5MjM1OTU5WjBiMQsw
@@ -18825,33 +18829,33 @@ ProcessGCCollect 'ScriptEnd'
 # UzEXMBUGA1UEChMORGlnaUNlcnQsIEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRy
 # dXN0ZWQgRzQgQ29kZSBTaWduaW5nIFJTQTQwOTYgU0hBMzg0IDIwMjEgQ0ExAhAL
 # bN+2Z4EOKufLWhG6HUlwMAkGBSsOAwIaBQCgQDAZBgkqhkiG9w0BCQMxDAYKKwYB
-# BAGCNwIBBDAjBgkqhkiG9w0BCQQxFgQUNCsx6A0MnF+STsb77n9WUpomF8IwDQYJ
-# KoZIhvcNAQEBBQAEggIAz0x1ywRNIT8m7BkdS5Zuy1RWd1KroG4qjY+NH/VH2MXD
-# YqwR2GAKA0qADOhnoUMmojEQbDE6FcUOsBNi67Nwg1Cr5h+8gAQeOKt0K4WPDV8l
-# hLVZwXH8TEvINpuJKjFy/uaR3K7B1XuClyvL15ZILtfTpFnpuvVdXgprn4bbcvgd
-# vfDnMcN/iqzWd/oLrBlRRH0ednspcrTIMyX5PKVm+Pmr8FrpWi8owlJwa+oxV/J2
-# iudje05EpZae8DHEW+8F1U2lmZEAd9LvNpYUzuUCgEpB3tTnzkziqq6Ay+t1oG+q
-# pfCMQOVmnYZ+18DyrolA9OfZtsdKRd4nRSnynMOmKEthF7dy0Yec+Q1MSM4eAw5F
-# 2JBXO4F1bcZof1CLtoMN0ad3aMq/DsyTDYTiNUQElsV3IlhQyV4plsJ9OX0A8ONN
-# tEjhhOrd+AYZRavEdYIHtAXF6nttlz7TcxvO5RoZu8s7MszogaU1m7oO7Yg7oOcT
-# zpZhFOAoWujuWn8yfnt+tNehtQgUPtIb1AZfpAphHbaFkkzHrGRzfYdDrzJc1U/T
-# lvoOIgRoU36sVn5UW08elQZY1aIfgu2d3Rvh0CN5utB12Oz7s2TXF7luhTumBm+x
-# +YhjQJFMM8YE+rqwQU/JQPY9lqmmiDlgc4LHnZUTGxIZtbwCR6XuKbbN3QnY3SCh
+# BAGCNwIBBDAjBgkqhkiG9w0BCQQxFgQU+UXZ4kSJ0vlJCRcgSTsAH2UbesIwDQYJ
+# KoZIhvcNAQEBBQAEggIAwXDkvWr1w+xCFf61FUH8DH+aR9b8mXu5LOm8LkBTejt3
+# N/ek2B7nhVxqm5Na+H84PUG/idke3J6fsi5gDRj3agwRt9Vfacn3E7Y4WtjG/HRw
+# t+5YAo7Lvn92UcNOn938dGT1D76Kp4FCqRdIF6Idu8SLSeRcJ1aEL7uDJ+rglx+G
+# ADLil3aWFyHFY1kJlhlsYwEOCRGd2Ycy867kaLWNf/GUrq9ITCxyQw7RsSZsjziS
+# +qVFTeA2S/3j5pErDU8TU+1aJSck8o2WTCKC/We7rwrKWWr1jGPw36sFfdp6Vtjr
+# dwA38SX5ON4/KQUF89ZyZN5iQSiS+t2B4FmKhEa482Cg2LsKbAqfHCp3xoH8RUA0
+# mUuuyOF9cDBXSxtlkIYOydMD3ro7bYFSv6ltlMwPlttVppaKNR84N1PzFamIwAe2
+# iQhTZ51DS9Tsexw85kwAhIIv9AH0qzljYBOuhJSXtaa1EIMldE5OB6b1VmwH9N2m
+# kSgHuviOEwkvu21FToRI+ZDYqTITW13mc6yoHP+v2fKxGFUO+5GlAhA1nDXJYAwj
+# mb89NMxoLihwXxa302asluQ2p6ee3F7pCU3K9az1YaYD+zdYhvJkHLMmprCqJoo6
+# wNYYyoR6E9n61LxvZQLWcjQpyIq7fgOe6wgKjlVL5KnNTWLOgb13kNjMcO43CAuh
 # ggMmMIIDIgYJKoZIhvcNAQkGMYIDEzCCAw8CAQEwfTBpMQswCQYDVQQGEwJVUzEX
 # MBUGA1UEChMORGlnaUNlcnQsIEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRydXN0
 # ZWQgRzQgVGltZVN0YW1waW5nIFJTQTQwOTYgU0hBMjU2IDIwMjUgQ0ExAhAKgO8Y
 # S43xBYLRxHanlXRoMA0GCWCGSAFlAwQCAQUAoGkwGAYJKoZIhvcNAQkDMQsGCSqG
-# SIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMjUwNzMxMTg0ODIyWjAvBgkqhkiG9w0B
-# CQQxIgQgsFuCRVn+tUSyfdCrYkTYr622/t1oXMBfcuvCpWKGmaAwDQYJKoZIhvcN
-# AQEBBQAEggIAdqG9XiuD57m5jWSpUX0EKKLIgZUlwWx3Fj+GIz1hMm6SqH0OH4Ct
-# gGYgILuuWQ6xtq7KxFACLGrq5kMnuK0OIkrExb7WBtrFGtqnlb/H44ZaaU73pqQ4
-# I3DHPX3ZE5AuLsQIGPh/e4RizZhMaegeNO/7yojru1GyBAx95d6ibXC7X8Yk2mIQ
-# w4HyJat1jz/cgVRA1d//od7TK+K38RApCKYdsDlF4mrqA7lx0XgN4jv2w7CnpRtb
-# iE3jcJtwJ8fPCT+aYA9p/rOzledeHWtqOyO8m4x+wEztwJdjZUNbHab5Xc32e0Iy
-# JoJ6L1wyPR8thzLQXZr1p2/9Sjq7DNPAdjpMIgpUYuvDecC6FmyEvyOsiEfbWDHA
-# GMdwsegRUpys4Vwa8HZFWUBmgCHK+a1ELg31B0zs9ZF79x8l5z2x31MGMsjNK0SH
-# HO70UmQsv0nRC2eKp+Xk3CoSP12nYAf2Iq3WhddjQwXQcSuAtu2MePMcPnJkb4vY
-# MpwBkFFgpkEW/D4iNPrLK5/znhJMlBLsmzLsISod5BCgPlmVKTgmO4SMSC66Ftqv
-# M2fUwExMFJvnKfH6WZoU2FMUqzyQK+vOWJnBPZ/vN01Gc290B8AAJ/S3yVe2PVB3
-# 0sFKxx8/qSL+ww/aW/2JI66Qb3MiqbW8qJinQgiYMKmmYaVZ58ttX7g=
+# SIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMjUwOTE1MTgzMjMxWjAvBgkqhkiG9w0B
+# CQQxIgQgTGxrB+6WKCjkewVDq9EqmhHrBkAB/M6nxvqREVyxs+EwDQYJKoZIhvcN
+# AQEBBQAEggIAOlwEMPPWMXq3RtoyUJEZcZWeOxeTQ+mLaI4Qxa4jKSy7rogt/8hJ
+# Z2KB/LIWy9TDS/V5NYWl/Cd9Tl4+jDynhQbj9G9vUqgW6uosCaI2r9cXf4/aLfXF
+# +txtTp+1V/l/jVDpoOcZPKqmEmrQjrqPjS+RqOdvlUDDM0UoEzQo+mSbBZVDTOpF
+# D0+XDTFomzFnM7P9gH1Og+s+6BJOglwZzbjT2AM6NrdWZOXJNTPqVzrSKDK2HL3E
+# xcTyXZEdUTcotlhcBXK1rsyQz5pgPprN8Jq6jvtcpQiP4BN66kw9nKgRPQ6stez6
+# Z9MNPpVuw30v46u+BCvqsDb09qgsFzpGnoW4i83oE84pWl4YyOVwOdFMvMNeK+Vy
+# mBnSZVSrZfH+P8KjrH65wm8AquRttVrJJmjbYb3F331Vyb4PbrG2+bEpDjo+Tm+9
+# V2S/rTkAzx20id4fzYOGA4GuBa72jYnvrTiAYy4dOGv/1sNZhW+GsR4jV3YQx5Kn
+# PNS3rFGIuMQvf1qkgJsvSpQ7P8UWsiNn54MVcxMYjvOS69tsbLrdURv6SS4fKTqL
+# eBgbWDxDuWukDHEJiVj/GxGz9Baiaco01xTG/Q4rDjbFgY3iEhhjwKEw3+Lxfzxr
+# 717YzhQQ8VsEtvlY2ibbtHh1BDtk2S9936mvvx3nD+gljqf0AaGMA38=
 # SIG # End signature block

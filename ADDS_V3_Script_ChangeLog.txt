@@ -1,4 +1,4 @@
-#Original Script created April, 2014 by Carl Webster with a lot of help from Michael B. Smith Exchange MVP
+#Original Script created April 2014 by Carl Webster with a lot of help from Michael B. Smith, Exchange MVP
 #Created by Carl Webster and Michael B. Smith
 #webster@carlwebster.com
 #@carlwebster on Twitter
@@ -9,6 +9,10 @@
 #https://www.essential.exchange/blog/
 
 #Version 3.20 31-Jul-2025, update done by Michael B. Smith
+#
+#####
+#	September 15, 2025, created a slipstreamed update for 3.20 to update references from ShareFile to Dropbox
+#####
 #	An RODC may not have a dnsHostName attribute. In that case, store the Name attribute instead
 #	Correct configNC coercion (the prior way worked, but was the difficult way to do it)
 #	Machine Account Quota was not retrieved for all AD domains, only for the forest root. Fixed. Reported by zjorz.

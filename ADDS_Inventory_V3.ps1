@@ -54,17 +54,17 @@
 	
 	To run the script from a workstation, RSAT is required.
 	
-	Remote Server Administration Tools for Windows 7 with Service Pack 1 (SP1)
-		https://carlwebster.sharefile.com/d-sace5ee0f1ada47289ca14be544878a24
-		
-	Remote Server Administration Tools for Windows 8 
-		https://carlwebster.sharefile.com/d-s791075d451fc415ca83ec8958b385a95
-		
-	Remote Server Administration Tools for Windows 8.1 
-		https://carlwebster.sharefile.com/d-s37209afb73dc48f497745924ed854226
-		
-	Remote Server Administration Tools for Windows 10
-		http://www.microsoft.com/en-us/download/details.aspx?id=45520
+    Remote Server Administration Tools for Windows 7 with Service Pack 1 (SP1)
+        https://www.dropbox.com/scl/fi/08kiotv8gfvqir2zgw101/Windows6.1-KB958830-x64-RefreshPkg.msu?rlkey=i3jd840zyley4jl8511t7qskr&dl=0
+
+    Remote Server Administration Tools for Windows 8
+        https://www.dropbox.com/scl/fi/gsko69f7wu7byrfcb27uk/Windows6.2-KB2693643-x64.msu?rlkey=0kutsi07hlkvvsapp28tbxh73&dl=0
+
+    Remote Server Administration Tools for Windows 8.1
+        https://www.dropbox.com/scl/fi/66g2nt8jmxod6qugv4m8t/Windows8.1-KB2693643-x64.msu?rlkey=zvialkxe9suixb9s7nyfggv8f&dl=0
+
+    Remote Server Administration Tools for Windows 10
+        https://www.dropbox.com/scl/fi/o6u3m2c37ydoeu5z0vc1u/WindowsTH-KB2693643-x64.msu?rlkey=6u02xwdn04djt1zn5tq1temvo&dl=0
 	
 .PARAMETER ADDomain
 	Specifies an Active Directory domain object by providing one of the following 
@@ -825,7 +825,7 @@
 	NAME: ADDS_Inventory_V3.ps1
 	VERSION: 3.20
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: July 31, 2025
+	LASTEDIT: September 15, 2025
 #>
 
 
@@ -972,6 +972,10 @@ Param(
 #Version 2.0 is based on version 1.20
 #
 #Version 3.20 31-Jul-2025, update done by Michael B. Smith
+#
+#####
+#	September 15, 2025, created a slipstreamed update for 3.20 to update references from ShareFile to Dropbox
+#####
 #	An RODC may not have a dnsHostName attribute. In that case, store the Name attribute instead
 #	Correct configNC coercion (the prior way worked, but was the difficult way to do it)
 #	Machine Account Quota was not retrieved for all AD domains, only for the forest root. Fixed. Reported by zjorz.
@@ -1341,7 +1345,7 @@ $script:ExtraSpecialVerbose = $false
 #Report footer stuff
 $script:MyVersion           = '3.20'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "06/17/2024"
+$tmpdate                    = [datetime] "09/15/2025"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
