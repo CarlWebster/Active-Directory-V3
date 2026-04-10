@@ -8,6 +8,12 @@
 #@essentialexch on Twitter
 #https://www.essential.exchange/blog/
 
+#Version 3.21 10-Apr-2026
+#	Implement OverrideAdmin parameter. When this is set, the script will run even if the user is not a member of the 
+#		Administrators group. In some cases, everything has been delegated.
+#	Update the help text
+#	Update the ReadMe
+
 #Version 3.20 31-Jul-2025, update done by Michael B. Smith
 #
 #####

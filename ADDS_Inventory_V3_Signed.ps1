@@ -15,7 +15,7 @@
 	
 	Version 3.0 changes the default output report from Word to HTML.
 	
-	Word and PDF document includes a Cover Page, Table of Contents, and Footer.
+	Word and PDF documents include a Cover Page, Table of Contents, and Footer.
 	Includes support for the following language versions of Microsoft Word:
 		Catalan
 		Chinese
@@ -30,7 +30,7 @@
 		Spanish
 		Swedish
 
-	The script requires at least PowerShell version 3 but runs best in version 5.
+	The script requires at least PowerShell version 3, but runs best in version 5.
 
 	Word is NOT needed to run the script. This script outputs in Text and HTML.
 	
@@ -41,10 +41,10 @@
 	that will not or may not work without domain admin or enterprise admin rights.  
 	The Hardware and Services parameters require domain admin privileges.  
 	
-	The script does gathering of information on Time Server and AD database, log file, and 
-	SYSVOL locations. Those require access to the registry on each domain controller, which 
-	means the script should now always be run from an elevated PowerShell session with an 
-	account with a minimum of domain admin rights.
+	The script gathers information on the Time Server and the AD database, the log file, 
+    and the SYSVOL locations. Those require access to the registry on each domain controller, 
+    which means the script should now always be run from an elevated PowerShell session 
+    with an account with a minimum of domain admin rights.
 	
 	Running the script in a forest with multiple domains requires Enterprise Admin rights.
 
@@ -66,6 +66,11 @@
     Remote Server Administration Tools for Windows 10
         https://www.dropbox.com/scl/fi/o6u3m2c37ydoeu5z0vc1u/WindowsTH-KB2693643-x64.msu?rlkey=6u02xwdn04djt1zn5tq1temvo&dl=0
 	
+.PARAMETER OverrideAdmin
+	When this is set, the script will run even if the user is not a member of the 
+	Administrators group. In some cases, everything has been delegated.
+	
+	This parameter has an alias of OA.
 .PARAMETER ADDomain
 	Specifies an Active Directory domain object by providing one of the following 
 	property values. The identifier in parentheses is the LDAP display name for the 
@@ -148,9 +153,9 @@
 	Adds a date timestamp to the end of the file name.
 	
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2022 at 6PM is 2022-06-01_1800.
+	June 1, 2026 at 6PM is 2026-06-01_1800.
 	
-	Output filename will be ReportName_2022-06-01_1800.docx (or .pdf).
+	Output filename will be ReportName_2026-06-01_1800.docx (or .pdf).
 	
 	This parameter is disabled by default.
 	This parameter has an alias of ADT.
@@ -427,6 +432,18 @@
 	a domain controller that is also a global catalog server and uses that as the 
 	value for ComputerName.
 .EXAMPLE
+	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -OverrideAdmin
+	
+	Creates an HTML report.
+	
+	ADForest defaults to the value of $Env:USERDNSDOMAIN.
+
+	ComputerName defaults to the value of $Env:USERDNSDOMAIN, then the script queries for 
+	a domain controller that is also a global catalog server and uses that as the 
+	value for ComputerName.
+	
+	The script continues to run even if not run from an elevated PowerShell session.
+.EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -MSWord
 	
 	Uses all default values.
@@ -655,8 +672,8 @@
 
 	Adds a date time stamp to the end of the file name.
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2022 at 6PM is 2022-06-01_1800.
-	The output filename is company.tld_2022-06-01_1800.docx.
+	June 1, 2026 at 6PM is 2026-06-01_1800.
+	The output filename is company.tld_2026-06-01_1800.docx.
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -PDF -ADForest corp.carlwebster.com 
 	-AddDateTime
@@ -679,8 +696,8 @@
 
 	Adds a date time stamp to the end of the file name.
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2022 at 6PM is 2022-06-01_1800.
-	The output filename is corp.carlwebster.com_2022-06-01_1800.PDF
+	June 1, 2026 at 6PM is 2026-06-01_1800.
+	The output filename is corp.carlwebster.com_2026-06-01_1800.PDF
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -ADForest corp.carlwebster.com -Folder 
 	\\FileServer\ShareName
@@ -729,6 +746,21 @@
 		Services        = True
 		
 		Section         = "All"
+.EXAMPLE
+	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -MaxDetails -OA
+	
+	Creates an HTML report.
+
+	Set the following parameter values:
+		DCDNSInfo       = True
+		GPOInheritance  = True
+		Hardware        = True
+		IncludeUserInfo = True
+		Services        = True
+		
+		Section         = "All"
+	
+	The script continues to run even if not run from an elevated PowerShell session.
 .EXAMPLE
 	PS C:\PSScript >.\ADDS_Inventory_V3.ps1 -Dev -ScriptInfo -Log
 	
@@ -823,16 +855,21 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.20
+	VERSION: 3.21
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: September 15, 2025
+	LASTEDIT: April 10, 2026
 #>
 
 
 #thanks to @jeffwouters and Michael B. Smith for helping me with these parameters
 [CmdletBinding(SupportsShouldProcess = $False, ConfirmImpact = "None", DefaultParameterSetName = "") ]
 
-Param(
+Param
+(
+	[Parameter( Mandatory = $false )]
+	[Alias("OA")]
+	[Switch]$OverrideAdmin,
+
 	[parameter(Mandatory=$False)] 
 	[string]$ADDomain="", 
 
@@ -970,6 +1007,12 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.21 10-Apr-2026
+#	Implement OverrideAdmin parameter. When this is set, the script will run even if the user is not a member of the 
+#		Administrators group. In some cases, everything has been delegated.
+#	Update the help text
+#	Update the ReadMe
 #
 #Version 3.20 31-Jul-2025, update done by Michael B. Smith
 #
@@ -1345,7 +1388,7 @@ $script:ExtraSpecialVerbose = $false
 #Report footer stuff
 $script:MyVersion           = '3.20'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "09/15/2025"
+$tmpdate                    = [datetime] "06/17/2024"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -4209,6 +4252,7 @@ Function SetupWord
 
 	Write-Verbose "$(Get-Date -Format G): Attempt to load cover page $($CoverPage)"
 	$part = $Null
+	$BuildingBlocks = $null
 
 	$BuildingBlocksCollection | 
 	ForEach-Object {
@@ -6219,18 +6263,23 @@ Function ElevatedSession
 {
 	$currentPrincipal = New-Object Security.Principal.WindowsPrincipal( [Security.Principal.WindowsIdentity]::GetCurrent() )
 
-	If($currentPrincipal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator ))
+	If( $currentPrincipal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator ) )
 	{
 		Write-Verbose "$(Get-Date -Format G): This is an elevated PowerShell session"
 		Return $True
 	}
-	Else
+
+	If( $OverrideAdmin )
 	{
-		Write-Host "" -Foreground White
-		Write-Host "$(Get-Date): This is NOT an elevated PowerShell session" -Foreground White
-		Write-Host "" -Foreground White
-		Return $False
+		Write-Verbose "$(Get-Date -Format G): This is NOT an elevated PowerShell session, but OverrideAdmin is set and we will act as if elevated."
+		Return $True
 	}
+
+	Write-Host "" -Foreground White
+	Write-Host "$(Get-Date): This is NOT an elevated PowerShell session" -Foreground White
+	Write-Host "" -Foreground White
+
+	Return $False
 }
 
 Function Get-ComputerCountByOS
@@ -18617,8 +18666,8 @@ ProcessGCCollect 'ScriptEnd'
 # SIG # Begin signature block
 # MIIthQYJKoZIhvcNAQcCoIItdjCCLXICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUHqYrNGxVV94lCrCZEQ9yKVJB
-# 7uuggibfMIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxZz7uAXGi3ZIIYqV2HnGnIBN
+# y8qggibfMIIFjTCCBHWgAwIBAgIQDpsYjvnQLefv21DiCEAYWjANBgkqhkiG9w0B
 # AQwFADBlMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYD
 # VQQLExB3d3cuZGlnaWNlcnQuY29tMSQwIgYDVQQDExtEaWdpQ2VydCBBc3N1cmVk
 # IElEIFJvb3QgQ0EwHhcNMjIwODAxMDAwMDAwWhcNMzExMTA5MjM1OTU5WjBiMQsw
@@ -18829,33 +18878,33 @@ ProcessGCCollect 'ScriptEnd'
 # UzEXMBUGA1UEChMORGlnaUNlcnQsIEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRy
 # dXN0ZWQgRzQgQ29kZSBTaWduaW5nIFJTQTQwOTYgU0hBMzg0IDIwMjEgQ0ExAhAL
 # bN+2Z4EOKufLWhG6HUlwMAkGBSsOAwIaBQCgQDAZBgkqhkiG9w0BCQMxDAYKKwYB
-# BAGCNwIBBDAjBgkqhkiG9w0BCQQxFgQU+UXZ4kSJ0vlJCRcgSTsAH2UbesIwDQYJ
-# KoZIhvcNAQEBBQAEggIAwXDkvWr1w+xCFf61FUH8DH+aR9b8mXu5LOm8LkBTejt3
-# N/ek2B7nhVxqm5Na+H84PUG/idke3J6fsi5gDRj3agwRt9Vfacn3E7Y4WtjG/HRw
-# t+5YAo7Lvn92UcNOn938dGT1D76Kp4FCqRdIF6Idu8SLSeRcJ1aEL7uDJ+rglx+G
-# ADLil3aWFyHFY1kJlhlsYwEOCRGd2Ycy867kaLWNf/GUrq9ITCxyQw7RsSZsjziS
-# +qVFTeA2S/3j5pErDU8TU+1aJSck8o2WTCKC/We7rwrKWWr1jGPw36sFfdp6Vtjr
-# dwA38SX5ON4/KQUF89ZyZN5iQSiS+t2B4FmKhEa482Cg2LsKbAqfHCp3xoH8RUA0
-# mUuuyOF9cDBXSxtlkIYOydMD3ro7bYFSv6ltlMwPlttVppaKNR84N1PzFamIwAe2
-# iQhTZ51DS9Tsexw85kwAhIIv9AH0qzljYBOuhJSXtaa1EIMldE5OB6b1VmwH9N2m
-# kSgHuviOEwkvu21FToRI+ZDYqTITW13mc6yoHP+v2fKxGFUO+5GlAhA1nDXJYAwj
-# mb89NMxoLihwXxa302asluQ2p6ee3F7pCU3K9az1YaYD+zdYhvJkHLMmprCqJoo6
-# wNYYyoR6E9n61LxvZQLWcjQpyIq7fgOe6wgKjlVL5KnNTWLOgb13kNjMcO43CAuh
+# BAGCNwIBBDAjBgkqhkiG9w0BCQQxFgQUwNfeFu9aNEqRvnHd6J8g7i5lqfswDQYJ
+# KoZIhvcNAQEBBQAEggIAkhxepgown6XsRR158noOf3xD0cF7QgwjOEGNk+PGgUmw
+# 8qGrcgdL8L1xBxH24eRq04epsg+Q9Q9zhdEsUk7BZU83O5GiRTNCbNSfRIspkEAA
+# wVHml7cUP02rWZUhGIPMPA+lCxNc0TERDB9saJkqUOPRXtpKFOZfcN2qQs9jF4Ks
+# PJ7/dxJhMD45rAT1YvPror5Xg+XiZzJsEe7Lqr+l0DVAbL8/7gC4uzgkZv03nppj
+# +Z9XAAtouGfkWBHSTcODRt04VScOp05Mxq/ouIgpOkVjYcgRCz7AIereKgtyooVU
+# OBVM+CK6ITTWnRBqvU93PI6W0viVSALJWguyU/vw7OhtH7Ojn2tthBsbelU7bQBs
+# FXdb/sXCj1gRXb0a5u1QyhSYWMzsUA0YTxWiddd0T3uABcZ5e3W8uJUF9+iqXUpt
+# LtYj2WlYIuM86jna91N4AKVM7Q1BX3FVNYpbbx6/wK54niHnpYQ7bLZftzoG+ZuY
+# dMQcRmyZS+84xWUysk7msdmdbkpkFSccmJK1GjMTKCe2VQkikWhTCDrOTQQ9ScLc
+# CopbEYhPrsTpFGvN6RBsDwScsQ0ibRbHBWIFaLoYjvLBCDw0PD6eMRrQ1id/CkoJ
+# jOIAwNKgDt1zJeHpD/ZvundSreI5wmG1x5L+YkTOlpAwj9ZWQe+CW3btvKvdAAyh
 # ggMmMIIDIgYJKoZIhvcNAQkGMYIDEzCCAw8CAQEwfTBpMQswCQYDVQQGEwJVUzEX
 # MBUGA1UEChMORGlnaUNlcnQsIEluYy4xQTA/BgNVBAMTOERpZ2lDZXJ0IFRydXN0
 # ZWQgRzQgVGltZVN0YW1waW5nIFJTQTQwOTYgU0hBMjU2IDIwMjUgQ0ExAhAKgO8Y
 # S43xBYLRxHanlXRoMA0GCWCGSAFlAwQCAQUAoGkwGAYJKoZIhvcNAQkDMQsGCSqG
-# SIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMjUwOTE1MTgzMjMxWjAvBgkqhkiG9w0B
-# CQQxIgQgTGxrB+6WKCjkewVDq9EqmhHrBkAB/M6nxvqREVyxs+EwDQYJKoZIhvcN
-# AQEBBQAEggIAOlwEMPPWMXq3RtoyUJEZcZWeOxeTQ+mLaI4Qxa4jKSy7rogt/8hJ
-# Z2KB/LIWy9TDS/V5NYWl/Cd9Tl4+jDynhQbj9G9vUqgW6uosCaI2r9cXf4/aLfXF
-# +txtTp+1V/l/jVDpoOcZPKqmEmrQjrqPjS+RqOdvlUDDM0UoEzQo+mSbBZVDTOpF
-# D0+XDTFomzFnM7P9gH1Og+s+6BJOglwZzbjT2AM6NrdWZOXJNTPqVzrSKDK2HL3E
-# xcTyXZEdUTcotlhcBXK1rsyQz5pgPprN8Jq6jvtcpQiP4BN66kw9nKgRPQ6stez6
-# Z9MNPpVuw30v46u+BCvqsDb09qgsFzpGnoW4i83oE84pWl4YyOVwOdFMvMNeK+Vy
-# mBnSZVSrZfH+P8KjrH65wm8AquRttVrJJmjbYb3F331Vyb4PbrG2+bEpDjo+Tm+9
-# V2S/rTkAzx20id4fzYOGA4GuBa72jYnvrTiAYy4dOGv/1sNZhW+GsR4jV3YQx5Kn
-# PNS3rFGIuMQvf1qkgJsvSpQ7P8UWsiNn54MVcxMYjvOS69tsbLrdURv6SS4fKTqL
-# eBgbWDxDuWukDHEJiVj/GxGz9Baiaco01xTG/Q4rDjbFgY3iEhhjwKEw3+Lxfzxr
-# 717YzhQQ8VsEtvlY2ibbtHh1BDtk2S9936mvvx3nD+gljqf0AaGMA38=
+# SIb3DQEHATAcBgkqhkiG9w0BCQUxDxcNMjYwNDEwMTQ1OTA1WjAvBgkqhkiG9w0B
+# CQQxIgQgN74bF8CDKUqjm0DjdI3PJwe/7WmPj5IPRsfv9i+QV8wwDQYJKoZIhvcN
+# AQEBBQAEggIAp74K5NvfeNW7qpfypy4d32OtLzAv/PRE3bvVyNNG06Ni+rSRS0qn
+# 5DVrrOEr3QS9SmTZ4UWdZWmyavHb0sMEYPjfHWvkIrEtDgErBJigiIV/jzd+cpf1
+# hyS6Xq5JUQ7GJrl/KvsHvCRRDQOlPsc5cl0fIy+LCSDKBnUNgh7U1mg/k/oGy2A+
+# +dVaZ0cSFUhqteYjqncWAByc+C7jBU0NbIGhdukKLyqnQvusuhg0o96z32d9okor
+# 6PeDeBB+pKrO+w0vt165DtW5EmGNqGa1f3pnzwUzoG/SYEZkq/3MEgnz6T5/8fod
+# lzuXXrYm6BqeuVcGCFrYEmSptzU141ft2B7pvZ4I2IyNXG9hMychwubYqISwAfqn
+# BFCm+yi6Yz0WgiJ5RmY5Dh2oPn0u1qB4CgZSgBCmgeKpBxNs64Iz1U0GDW7TpQdL
+# YmqjveaiVMI5Qw7dgCkXpxvu89HggEQCLG0n0R64zv4eow4EuvfIb0yWb67ooMH1
+# fz+JqwWWBB66sIrsxsXd2lBWipkgz4ats+iRbz/ijdtQNVQeMtJhmPqOiqWu3c6Y
+# brBEuvuT0m4JFBxCpBeoQx+6tpgdQXs6Sn/VBO0SMKG3rtawK4vsdXk5XANpwqYe
+# 7m57hXRaYFYTwOqWnL4atsOWn5r74ET05bkrYYtiCzuLaignay2MLLs=
 # SIG # End signature block
