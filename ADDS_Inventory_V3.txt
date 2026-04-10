@@ -15,7 +15,7 @@
 	
 	Version 3.0 changes the default output report from Word to HTML.
 	
-	Word and PDF document includes a Cover Page, Table of Contents, and Footer.
+	Word and PDF documents include a Cover Page, Table of Contents, and Footer.
 	Includes support for the following language versions of Microsoft Word:
 		Catalan
 		Chinese
@@ -30,7 +30,7 @@
 		Spanish
 		Swedish
 
-	The script requires at least PowerShell version 3 but runs best in version 5.
+	The script requires at least PowerShell version 3, but runs best in version 5.
 
 	Word is NOT needed to run the script. This script outputs in Text and HTML.
 	
@@ -41,10 +41,10 @@
 	that will not or may not work without domain admin or enterprise admin rights.  
 	The Hardware and Services parameters require domain admin privileges.  
 	
-	The script does gathering of information on Time Server and AD database, log file, and 
-	SYSVOL locations. Those require access to the registry on each domain controller, which 
-	means the script should now always be run from an elevated PowerShell session with an 
-	account with a minimum of domain admin rights.
+	The script gathers information on the Time Server and the AD database, the log file, 
+    and the SYSVOL locations. Those require access to the registry on each domain controller, 
+    which means the script should now always be run from an elevated PowerShell session 
+    with an account with a minimum of domain admin rights.
 	
 	Running the script in a forest with multiple domains requires Enterprise Admin rights.
 
@@ -66,6 +66,11 @@
     Remote Server Administration Tools for Windows 10
         https://www.dropbox.com/scl/fi/o6u3m2c37ydoeu5z0vc1u/WindowsTH-KB2693643-x64.msu?rlkey=6u02xwdn04djt1zn5tq1temvo&dl=0
 	
+.PARAMETER OverrideAdmin
+	When this is set, the script will run even if the user is not a member of the 
+	Administrators group. In some cases, everything has been delegated.
+	
+	This parameter has an alias of OA.
 .PARAMETER ADDomain
 	Specifies an Active Directory domain object by providing one of the following 
 	property values. The identifier in parentheses is the LDAP display name for the 
@@ -148,9 +153,9 @@
 	Adds a date timestamp to the end of the file name.
 	
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2022 at 6PM is 2022-06-01_1800.
+	June 1, 2026 at 6PM is 2026-06-01_1800.
 	
-	Output filename will be ReportName_2022-06-01_1800.docx (or .pdf).
+	Output filename will be ReportName_2026-06-01_1800.docx (or .pdf).
 	
 	This parameter is disabled by default.
 	This parameter has an alias of ADT.
@@ -427,6 +432,18 @@
 	a domain controller that is also a global catalog server and uses that as the 
 	value for ComputerName.
 .EXAMPLE
+	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -OverrideAdmin
+	
+	Creates an HTML report.
+	
+	ADForest defaults to the value of $Env:USERDNSDOMAIN.
+
+	ComputerName defaults to the value of $Env:USERDNSDOMAIN, then the script queries for 
+	a domain controller that is also a global catalog server and uses that as the 
+	value for ComputerName.
+	
+	The script continues to run even if not run from an elevated PowerShell session.
+.EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -MSWord
 	
 	Uses all default values.
@@ -655,8 +672,8 @@
 
 	Adds a date time stamp to the end of the file name.
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2022 at 6PM is 2022-06-01_1800.
-	The output filename is company.tld_2022-06-01_1800.docx.
+	June 1, 2026 at 6PM is 2026-06-01_1800.
+	The output filename is company.tld_2026-06-01_1800.docx.
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -PDF -ADForest corp.carlwebster.com 
 	-AddDateTime
@@ -679,8 +696,8 @@
 
 	Adds a date time stamp to the end of the file name.
 	The timestamp is in the format of yyyy-MM-dd_HHmm.
-	June 1, 2022 at 6PM is 2022-06-01_1800.
-	The output filename is corp.carlwebster.com_2022-06-01_1800.PDF
+	June 1, 2026 at 6PM is 2026-06-01_1800.
+	The output filename is corp.carlwebster.com_2026-06-01_1800.PDF
 .EXAMPLE
 	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -ADForest corp.carlwebster.com -Folder 
 	\\FileServer\ShareName
@@ -729,6 +746,21 @@
 		Services        = True
 		
 		Section         = "All"
+.EXAMPLE
+	PS C:\PSScript > .\ADDS_Inventory_V3.ps1 -MaxDetails -OA
+	
+	Creates an HTML report.
+
+	Set the following parameter values:
+		DCDNSInfo       = True
+		GPOInheritance  = True
+		Hardware        = True
+		IncludeUserInfo = True
+		Services        = True
+		
+		Section         = "All"
+	
+	The script continues to run even if not run from an elevated PowerShell session.
 .EXAMPLE
 	PS C:\PSScript >.\ADDS_Inventory_V3.ps1 -Dev -ScriptInfo -Log
 	
@@ -823,16 +855,21 @@
 	No objects are output from this script.  This script creates a Word or PDF document.
 .NOTES
 	NAME: ADDS_Inventory_V3.ps1
-	VERSION: 3.20
+	VERSION: 3.21
 	AUTHOR: Carl Webster and Michael B. Smith
-	LASTEDIT: September 15, 2025
+	LASTEDIT: April 10, 2026
 #>
 
 
 #thanks to @jeffwouters and Michael B. Smith for helping me with these parameters
 [CmdletBinding(SupportsShouldProcess = $False, ConfirmImpact = "None", DefaultParameterSetName = "") ]
 
-Param(
+Param
+(
+	[Parameter( Mandatory = $false )]
+	[Alias("OA")]
+	[Switch]$OverrideAdmin,
+
 	[parameter(Mandatory=$False)] 
 	[string]$ADDomain="", 
 
@@ -970,6 +1007,12 @@ Param(
 #Version 1.0 released to the community on May 31, 2014
 #
 #Version 2.0 is based on version 1.20
+#
+#Version 3.21 10-Apr-2026
+#	Implement OverrideAdmin parameter. When this is set, the script will run even if the user is not a member of the 
+#		Administrators group. In some cases, everything has been delegated.
+#	Update the help text
+#	Update the ReadMe
 #
 #Version 3.20 31-Jul-2025, update done by Michael B. Smith
 #
@@ -1345,7 +1388,7 @@ $script:ExtraSpecialVerbose = $false
 #Report footer stuff
 $script:MyVersion           = '3.20'
 $Script:ScriptName          = "ADDS_Inventory_V3.ps1"
-$tmpdate                    = [datetime] "09/15/2025"
+$tmpdate                    = [datetime] "06/17/2024"
 $Script:ReleaseDate         = $tmpdate.ToUniversalTime().ToShortDateString()
 
 Function wv
@@ -4209,6 +4252,7 @@ Function SetupWord
 
 	Write-Verbose "$(Get-Date -Format G): Attempt to load cover page $($CoverPage)"
 	$part = $Null
+	$BuildingBlocks = $null
 
 	$BuildingBlocksCollection | 
 	ForEach-Object {
@@ -6219,18 +6263,23 @@ Function ElevatedSession
 {
 	$currentPrincipal = New-Object Security.Principal.WindowsPrincipal( [Security.Principal.WindowsIdentity]::GetCurrent() )
 
-	If($currentPrincipal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator ))
+	If( $currentPrincipal.IsInRole( [Security.Principal.WindowsBuiltInRole]::Administrator ) )
 	{
 		Write-Verbose "$(Get-Date -Format G): This is an elevated PowerShell session"
 		Return $True
 	}
-	Else
+
+	If( $OverrideAdmin )
 	{
-		Write-Host "" -Foreground White
-		Write-Host "$(Get-Date): This is NOT an elevated PowerShell session" -Foreground White
-		Write-Host "" -Foreground White
-		Return $False
+		Write-Verbose "$(Get-Date -Format G): This is NOT an elevated PowerShell session, but OverrideAdmin is set and we will act as if elevated."
+		Return $True
 	}
+
+	Write-Host "" -Foreground White
+	Write-Host "$(Get-Date): This is NOT an elevated PowerShell session" -Foreground White
+	Write-Host "" -Foreground White
+
+	Return $False
 }
 
 Function Get-ComputerCountByOS
